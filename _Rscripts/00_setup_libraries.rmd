@@ -1,0 +1,73 @@
+---
+always_allow_html: true
+output:
+  rmarkdown::github_document: default
+  always_allow_html: default
+  output:
+  md_document:
+    variant: gfm
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "../") })
+date: "2025-09-30"
+title: "00_setup_libraries"
+---
+
+```{r setup, include=FALSE}
+base_dir <- "../" # where output should default to
+base_url <- "" # keep as is
+fig_path <- "plot_images/" # where image output should go
+
+knitr::opts_knit$set(base.dir = base_dir)
+knitr::opts_chunk$set(fig.path = fig_path,
+                      cache.path = '../cache/',  #log files go here
+                      message=FALSE, warning=FALSE,
+                      cache = TRUE) 
+```  
+
+## 0. Setup
+### Required Packages
+- For convenience, this code checks if libraries are installed - and if not, installs them. 
+- comment "#" or uncomment lines if you are/aren't interested in the library. 
+
+```{r LIBRARIES}
+## required packages
+
+#check if installed, if not install
+
+# data wrangling, flitering, manipulating, viewing
+if (!requireNamespace("dplyr", quietly = TRUE)) install.packages("dplyr") #for manipulating data, using PIPES %>% for easier readability
+if (!requireNamespace("tidyr", quietly = TRUE)) install.packages("tidyr") #pivoting and manipulating data, structuring data for output
+
+### ---------------------------------------------------------------------------
+## Rmarkdown, output, better HTML elements in Rmarkdown 
+if (!requireNamespace("kableExtra", quietly = TRUE)) install.packages("kableExtra") #for making HTML tables in Rmarkdown
+if (!requireNamespace("knitr", quietly = TRUE)) install.packages("knitr") #for making HTML tables in Rmarkdown
+if (!requireNamespace("rmarkdown", quietly = TRUE)) install.packages("rmarkdown") #for making HTML tables in Rmarkdown
+### ---------------------------------------------------------------------------
+
+## data reading/writing
+if (!requireNamespace("readxl", quietly = TRUE)) install.packages("readxl")
+if (!requireNamespace("writexl", quietly = TRUE)) install.packages("writexl")
+#if (!requireNamespace("readr", quietly = TRUE)) install.packages("readr")
+
+## data Viz ---------------------
+if (!requireNamespace("ggplot2", quietly = TRUE)) install.packages("ggplot2") #tailored graphs/charts & data viz for exploration
+if (!requireNamespace("patchwork", quietly = TRUE)) install.packages("patchwork") #for combining ggplot2 charts
+
+### ---------------------------------------------------------------------------
+## formatting, publications
+if (!requireNamespace("jtools", quietly = TRUE)) install.packages("jtools") #APA format - theme
+
+### ---------------------------------------------------------------------------
+## Regression/Stats
+#if(!requireNamespace("lme4", quietly = TRUE)) install.packages("lme4") #mixed effects models
+#if(!requireNamespace("lmerTest", quietly = TRUE)) install.packages("lmerTest") #p-values for mixed effects models
+#if(!requireNamespace("car", quietly = TRUE)) install.packages("car") #Anova for mixed effects models
+#if(!requireNamespace("emmeans", quietly = TRUE)) install.packages("emmeans") #estimated marginal means (EMMs) for mixed effects models
+```
+
+### Info on apps/code used for this work
+```{r}
+sessionInfo()   #utility to see what version of R, Rstudio, and Package versions are used for this work. 
+```
+

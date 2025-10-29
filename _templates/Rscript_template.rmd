@@ -1,0 +1,59 @@
+---
+title: "Rscript_template"
+author: "..."
+date: "2025-10-01"
+always_allow_html: true
+output:
+  rmarkdown::github_document: default
+  always_allow_html: default
+  output:
+  md_document:
+    variant: gfm
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "../") })
+---
+
+# Template File (Heading 1)
+## the YAML header works with the default structure... (Heading 2)
+- this template uses git-flavored markdown (gfm)...
+- and is set to render to the parent directory...
+- So you end up with *clean* markdown files for viewers
+- with scripts,data, etc... in the other folders. 
+
+## Required CHUNK for markdown rendering
+```{r setup, include=FALSE}
+base_dir <- "../" # output goes "up" into the containing folder (base dir)
+base_url <- "" # keep as is - only needed if for html output/github pages versions (see readme and other templates
+fig_path <- "../_plot_images/" # where image output should go
+
+knitr::opts_knit$set(base.dir = base_dir)
+knitr::opts_chunk$set(fig.path = fig_path,
+                      cache.path = '../_cache/',  #log files go here - IF YOU ARE USING CACHE
+                      # Some reproducible examples will want this FALSE/EXLCUDED so there isn't any 'hidden (cached) data' making it's way into your analysis/scripts. 
+                      message=FALSE, warning=FALSE,
+                      cache = FALSE) # set to TRUE if you want to use caching
+```  
+
+If you are maintaining the SAME setup for each of your script files, you can set the following parameters by SOURCEing the utility_functions.R script in this folder, and running the following function, OR SOURCING the default version directly, as seen below. 
+```{r}
+source("_templates/utility_functions.R") #loads the function but DOES NOT RUN IT
+# you can then set invidiual arguments. 
+
+source("default_slick_knit_ops.R") # runs the function with default arguments, output set to FALSE
+```
+
+
+
+## Note on Rmardkown or "Notebooks"
+- This is an Rmarkdown, which allows code 'chunks' or 'blocks' and text in the same document.
+- Code output - such as viewing tables or charts appears below blocks when you write them. 
+
+- It is useful to write outlines and sections for specific chunks.
+- And to write analytic notes below different code chunks. 
+- The output of an Rmarkdown (.Rmd) can be published as a .PDF, word doc, or .HTML file. 
+
+- In the YAML header and chunk above, are specific options for file organization.
+  - Markdown documents -- readable versions of the analysis live in the main folder
+  - The scripts that create these live in _Rscripts
+  - *input* data in _data, including created data for analysis (e.g. R.data objects...)
+  - *output* goes into _tables or plots_images depending on type.

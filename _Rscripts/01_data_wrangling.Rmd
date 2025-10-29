@@ -1,0 +1,33 @@
+---
+title: "1_data_wrangling"
+author: "..."
+date: "2025-10-01"
+always_allow_html: true
+output:
+  rmarkdown::github_document: default
+  always_allow_html: default
+  output:
+  md_document:
+    variant: gfm
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "../") })
+---
+
+```{r setup, include=FALSE}
+source("../_templates/utility_functions.R")
+.default_slick_knit_ops(verbose=TRUE)
+```  
+
+
+```{r}
+# Load libraries
+library(dplyr)
+```
+
+```{r}
+#load data
+crash <- read.csv("../_data/Crashes_Data_2019-2023.csv")
+str(crash)
+```
+
+
