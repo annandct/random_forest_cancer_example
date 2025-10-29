@@ -16,7 +16,27 @@ knit: (function(inputFile, encoding) {
 ```{r setup, include=FALSE}
 source("../_templates/utility_functions.R")
 .default_slick_knit_ops(verbose=TRUE)
+
+base_dir <- "../" # where output should default to
+base_url <- "" # keep as is
+fig_path <- "_plot_images/" # where image output should go
+
+knitr::opts_knit$set(base.dir = base_dir)
+knitr::opts_chunk$set(fig.path = fig_path,
+                      cache.path = '../cache/',  #log files go here
+                      message=FALSE, warning=FALSE,
+                      cache = TRUE) 
 ```  
+
+
+# Analysis Scripts
+
+- **Description:**
+    - Create two analysis scripts:
+        - **Script 1:** Initial descriptions of the breast cancer data set
+        - **Script 2:** Implement random forest algorithm using tidy models and R
+- **Code Organization:**
+    - Separate code for each script and analysis
 
 
 ```{r}
@@ -24,10 +44,111 @@ source("../_templates/utility_functions.R")
 library(dplyr)
 ```
 
+## Load Data
 ```{r}
 #load data
-crash <- read.csv("../_data/Crashes_Data_2019-2023.csv")
-str(crash)
+raw_dat <- read.csv("../_data/Breast Cancer Wisconsin Data.csv")
+str(raw_dat)
 ```
 
+## Descriptive Summary of Data
+```{r}
+mutate_dat <- 
+  raw_dat %>% mutate(diag_text = ifelse(diagnosis=="B", "Benign", "Malignant")) %>%  
+  group_by(diag_text) %>%
+  summarise(
+    count = n(),
+    mean_radius = mean(radius_mean, na.rm = TRUE),
+    mean_texture = mean(texture_mean, na.rm = TRUE)
+  )
+```
+## Viz
+```{r}
+library(ggplot2)
+#regression view of the diagnosis types
+
+raw_dat %>% mutate(diag_text = ifelse(diagnosis=="B", "Benign", "Malignant")) %>%  
+  ggplot(aes(x=radius_mean, y =  texture_mean, size = area_mean, color=diag_text)) +
+  geom_point(size=3) +
+  geom_smooth(method="lm")+
+  labs(title="Mean Radius vs Mean Texture by Diagnosis Type",
+       x="Mean Radius",
+       y="Mean Texture",
+       color="Diagnosis Type") +
+  theme_minimal()
+
+```
+### Comment-CTA:: 
+- Already we are seeing reasonable separation between the BENING and MALIGNANT groups based on just a few of these variables...
+- Dataset likely would need dimens reduction.
+
+
+## Minimal Random Forest Implementation
+```{r}
+library(tidymodels)
+#install.packages("ranger")
+# Set seed for reproducibility
+set.seed(123)
+```
+
+```{r}
+# Split the data into training and testing sets
+data_split <- initial_split(raw_dat, prop = 0.8, strata = diagnosis)
+train_data <- training(data_split)
+test_data <- testing(data_split)
+```
+
+```{r}
+# Define the random forest model
+rf_model <- rand_forest(mtry = 5, trees = 1000, min_n = 10) %>%
+  set_engine("ranger") %>%
+  set_mode("classification")
+```
+
+```{r}
+# Create a recipe for preprocessing
+rf_recipe <- recipe(diagnosis ~ ., data = train_data) %>%
+  step_rm(id) %>%
+  step_normalize(all_numeric_predictors())
+```
+
+```{r}
+# Create a workflow
+rf_workflow <- workflow() %>%
+  add_model(rf_model) %>%
+  add_recipe(rf_recipe)
+```
+
+```{r}
+# Train the model
+rf_fit <- rf_workflow %>%
+  fit(data = train_data)
+```
+
+```{r}
+# Make predictions on the test set
+rf_predictions <- rf_fit %>%
+  predict(new_data = test_data) %>%
+  bind_cols(test_data %>% select(diagnosis))
+```
+
+```{r}
+# Evaluate the model
+rf_metrics <- rf_predictions %>% mutate(diagnosis = factor(diagnosis, levels = c("B", "M"))) %>%
+  metrics(truth = diagnosis, estimate = .pred_class)
+
+print(rf_metrics)
+```
+
+## Plot to show Prediction differential
+```{r}
+rf_predictions %>%
+  ggplot(aes(x = .pred_class, fill = diagnosis)) +
+  geom_histogram(stat = "count", position = "identity", alpha = 0.6, bins = 30) +
+  labs(title = "Random Forest Predictions: Probability of Malignant",
+       x = "Predicted Probability of Malignant",
+       y = "Count",
+       fill = "Actual Diagnosis") +
+  theme_minimal()
+```
 
