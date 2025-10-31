@@ -1,9 +1,9 @@
 1_data_wrangling
 ================
-…
+CTA-PHD-DWZ
 2025-10-01
 
-# Analysis Scripts
+# Analysis Scripts:: Colin T. Annand - Ph.D., D.WZ.
 
 - **Description:**
   - Create two analysis scripts:
@@ -87,7 +87,8 @@ raw_dat %>% mutate(diag_text = ifelse(diagnosis=="B", "Benign", "Malignant")) %>
   labs(title="Mean Radius vs Mean Texture by Diagnosis Type",
        x="Mean Radius",
        y="Mean Texture",
-       color="Diagnosis Type") +
+       color="Diagnosis Type",
+       caption = "Plot by Colin T. Annand") +
   theme_minimal()
 ```
 
@@ -169,8 +170,12 @@ rf_predictions %>%
   labs(title = "Random Forest Predictions: Probability of Malignant",
        x = "Predicted Probability of Malignant",
        y = "Count",
-       fill = "Actual Diagnosis") +
+       fill = "Actual Diagnosis",
+       caption = "Plot by Colin T. Annand") +
   theme_minimal()
 ```
 
-![](_plot_images/unnamed-chunk-13-1.png)<!-- -->
+![](_plot_images/unnamed-chunk-13-1.png)<!-- --> \### CTA Comments -
+This bar plot is showing the model predictions vs accuracy. Essentially,
+the SMALL OVERLAP in the light Blue (M) for malignant is showing where
+the model classified a BENIGN tumor as Malignant.
