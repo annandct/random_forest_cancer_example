@@ -1,0 +1,138 @@
+---
+title: "02_lasso_regression.md"
+author: "You!"
+date: "2025-10-31"
+always_allow_html: true
+output:
+  rmarkdown::github_document: default
+  always_allow_html: default
+  output:
+  md_document:
+    variant: gfm
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "../") })
+---
+
+```{r setup, include=FALSE}
+source("../_templates/utility_functions.R")
+.default_slick_knit_ops(verbose=TRUE)
+
+base_dir <- "../" # where output should default to
+base_url <- "" # keep as is
+fig_path <- "_plot_images/" # where image output should go
+
+knitr::opts_knit$set(base.dir = base_dir)
+knitr::opts_chunk$set(fig.path = fig_path,
+                      cache.path = '../cache/',  #log files go here
+                      message=FALSE, warning=FALSE,
+                      cache = TRUE) 
+```  
+
+## OUTLINE OF ANALYSIS 
+
+Step 3 (Implement Lasso): Implement Lasso Logistic Regression. 
+  - Use cross-validation to select the optimal regularization parameter (lambda). 
+  - The resulting model's coefficients will be analyzed to produce a ranked list of the most important diagnostic features.
+
+```{r}
+# Load libraries
+library(dplyr)
+library(tidymodels)
+library(yardstick)
+library(ggplot2)
+```
+
+## Load Data
+```{r}
+#load data
+raw_dat <- read.csv("../_data/Breast Cancer Wisconsin Data.csv")
+str(raw_dat)
+```
+
+```{r}
+data.m <- raw_dat %>% mutate(
+  diag_text = ifelse(diagnosis=="B", "Benign", "Malignant"),
+  diag_text = as.factor(diag_text)
+) %>%
+  select(-id, -diagnosis)
+
+glimpse(data.m)
+```
+
+## Pre process numeric vars for LAsso Regression
+- If needed
+
+
+```{r}
+numeric_vars <- data.m %>%
+  select(where(is.numeric))
+```
+
+```{r}
+# Standardize numeric variables
+numeric_vars_scaled <- as.data.frame(scale(numeric_vars))
+```
+
+## Import Lasso Regression Libraries
+
+```{r}
+#lasso libraries
+library(tidymodels)
+#install.packages("glmnet")
+library(glmnet)
+#install.packages("caret")
+library(caret)
+```
+
+## Setup Lasso Regression Model
+```{r}
+#setup lasso regression model
+lasso_spec <- logistic_reg(penalty = tune(), mixture = 1) %>%
+  set_engine("glmnet")
+```
+
+## tidymodels workflow set
+```{r}
+lasso_workflow <- workflow() %>%
+  add_model(lasso_spec) %>%
+  add_formula(diag_text ~ .)
+```
+
+```{r}
+# Cross-validation
+set.seed(123)
+cv_folds <- vfold_cv(data.m, v = 10, strata = diag_text)
+```
+
+```{r}
+# Hyperparameter tuning
+lasso_grid <- grid_regular(penalty(), levels = 50)
+
+```
+
+```{r}
+#show possible evaluation metrics --> YARDSTICK
+library(yardstick)
+metrics.sel = metric_set(roc_auc, accuracy)
+```
+
+
+```{r}
+lasso_tune <- tune_grid(
+  lasso_workflow,
+  resamples = cv_folds,
+  grid = lasso_grid,
+  metrics = metrics.sel
+)
+```
+
+## Create a Confusion Matric for the model predictions
+```{r}
+#confusion matrix
+
+lasso_best <- lasso_tune %>%
+  select_best()
+```
+
+
+
