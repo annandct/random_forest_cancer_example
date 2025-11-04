@@ -46,9 +46,9 @@ if (!requireNamespace("rmarkdown", quietly = TRUE)) install.packages("rmarkdown"
 ### ---------------------------------------------------------------------------
 
 ## data reading/writing
-if (!requireNamespace("readxl", quietly = TRUE)) install.packages("readxl")
-if (!requireNamespace("writexl", quietly = TRUE)) install.packages("writexl")
-#if (!requireNamespace("readr", quietly = TRUE)) install.packages("readr")
+#if (!requireNamespace("readxl", quietly = TRUE)) install.packages("readxl")
+#if (!requireNamespace("writexl", quietly = TRUE)) install.packages("writexl")
+if (!requireNamespace("readr", quietly = TRUE)) install.packages("readr")
 
 ## data Viz ---------------------
 if (!requireNamespace("ggplot2", quietly = TRUE)) install.packages("ggplot2") #tailored graphs/charts & data viz for exploration
@@ -64,6 +64,16 @@ if (!requireNamespace("jtools", quietly = TRUE)) install.packages("jtools") #APA
 #if(!requireNamespace("lmerTest", quietly = TRUE)) install.packages("lmerTest") #p-values for mixed effects models
 #if(!requireNamespace("car", quietly = TRUE)) install.packages("car") #Anova for mixed effects models
 #if(!requireNamespace("emmeans", quietly = TRUE)) install.packages("emmeans") #estimated marginal means (EMMs) for mixed effects models
+
+### ---------------------------------------------------------------------------
+## Machine Learning
+if (!requireNamespace("tidymodels", quietly = TRUE)) install.packages("tidymodels") #framework for machine learning
+if (!requireNamespace("recipes", quietly = TRUE)) install.packages("recipes") #standardized preprocessing of ML models (tify framework)
+if (!requireNamespace("yardstick", quietly = TRUE)) install.packages("yardstick") #measurements and metrics for models
+if (!requireNamespace("workflows", quietly = TRUE)) install.packages("workflows") #framework for machine learning
+if (!requireNamespace("ranger", quietly = TRUE)) install.packages("ranger") #algorithm for various random models
+if (!requireNamespace("glmnet", quietly = TRUE)) install.packages("glmnet") #generalized linear models
+if (!requireNamespace("caret", quietly = TRUE)) install.packages("caret") #framework for machine learning
 ```
 
 ### Info on apps/code used for this work
