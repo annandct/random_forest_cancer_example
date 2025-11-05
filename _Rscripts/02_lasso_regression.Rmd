@@ -127,7 +127,10 @@ show_best(lasso_tune_results, metric = "accuracy")
 
 # Select the single best penalty value
 best_lasso_params <- select_best(lasso_tune_results, metric = "accuracy")
+best_lasso_params
+```
 
+```{r}
 #fit best model ^^ this is duplication of code from above, but worth seeing/saving the params. Can also fit with the params
 best_lasso_fit <- fit_best(lasso_tune_results)
 tidy(best_lasso_fit)
@@ -157,17 +160,25 @@ final_lasso_fit <- last_fit(
 ### 7. Review Performance Metrics
 
 Let's see how our final tuned Lasso model performed on the test data.
-
+## Model Metrics
 ```{r metrics}
 # 11. COLLECT METRICS
 # Get the metrics from our test-set evaluation
 test_metrics <- collect_metrics(final_lasso_fit)
 print(test_metrics)
+```
 
+## Accuracy, Sensitivity, Recall Metrics
+
+```{r}
 # Get the predictions to build a confusion matrix
 test_predictions <- collect_predictions(final_lasso_fit)
+ml_mets <- metric_set(accuracy, precision, recall)
+ml_mets(test_predictions, truth = diagnosis, estimate = .pred_class)
+```
 
-# Generate and print the confusion matrix
+## Generate and print the confusion matrix
+```{r}
 # We again set positive = "M" for consistency
 conf_matrix <- conf_mat(
   test_predictions,
@@ -177,6 +188,9 @@ conf_matrix <- conf_mat(
 )
 
 print(conf_matrix)
+```
+
+```{r}
 autoplot(conf_matrix, type = "heatmap")
 ```
 
@@ -196,7 +210,9 @@ print("Plotting Variable Importance...")
 vip(fitted_lasso_model, num_features = 20) +
   labs(title = "Lasso Variable Importance",
        subtitle = "Features with non-zero coefficients")
+```
 
+```{r}
 # We can also 'tidy' the model to see the coefficients as a data frame
 print("Model Coefficients:")
 tidy(best_lasso_fit) %>%

@@ -250,7 +250,7 @@ final_svm_fit <- last_fit(
 Compare *tuned* model to test data
 
 ``` r
-# Get the metrics from our test-set evaluation
+# Get the MODEL METRICS metrics from our test-set evaluation
 test_metrics <- collect_metrics(final_svm_fit)
 print(test_metrics)
 ```
@@ -262,11 +262,26 @@ print(test_metrics)
     ## 2 roc_auc     binary        0.989  Preprocessor1_Model1
     ## 3 brier_class binary        0.0306 Preprocessor1_Model1
 
-``` r
-# Get the predictions to build a confusion matrix
-test_predictions <- collect_predictions(final_svm_fit)
+## Accuracy, Sensitivity, Recall Metrics
 
-# Generate and print the confusion matrix
+``` r
+# Get the PERFORMANCE metrics predictions to build a confusion matrix
+test_predictions <- collect_predictions(final_svm_fit)
+# Metrics from ML Course
+ml_mets <- metric_set(accuracy, precision, recall)
+ml_mets(test_predictions, truth = diagnosis, estimate = .pred_class)
+```
+
+    ## # A tibble: 3 × 3
+    ##   .metric   .estimator .estimate
+    ##   <chr>     <chr>          <dbl>
+    ## 1 accuracy  binary         0.958
+    ## 2 precision binary         0.946
+    ## 3 recall    binary         0.989
+
+## Generate and print the confusion matrix
+
+``` r
 # Note: In a confusion matrix, 'M' (Malignant) is our "positive" class.
 # We set 'M' to be the first level to ensure this.
 conf_matrix <- conf_mat(
@@ -289,7 +304,7 @@ print(conf_matrix)
 autoplot(conf_matrix, type = "heatmap")
 ```
 
-![](_plot_images/metrics-1.png)<!-- -->
+![](_plot_images/unnamed-chunk-5-1.png)<!-- -->
 
 ### 8. Save Model Artifacts
 

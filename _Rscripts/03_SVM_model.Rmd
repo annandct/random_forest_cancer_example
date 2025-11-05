@@ -176,14 +176,23 @@ final_svm_fit <- last_fit(
 ### 7. Review Performance Metrics
 Compare *tuned* model to test data
 ```{r metrics}
-# Get the metrics from our test-set evaluation
+# Get the MODEL METRICS metrics from our test-set evaluation
 test_metrics <- collect_metrics(final_svm_fit)
 print(test_metrics)
+```
 
-# Get the predictions to build a confusion matrix
+## Accuracy, Sensitivity, Recall Metrics
+```{r}
+# Get the PERFORMANCE metrics predictions to build a confusion matrix
 test_predictions <- collect_predictions(final_svm_fit)
+# Metrics from ML Course
+ml_mets <- metric_set(accuracy, precision, recall)
+ml_mets(test_predictions, truth = diagnosis, estimate = .pred_class)
+```
 
-# Generate and print the confusion matrix
+## Generate and print the confusion matrix
+```{r}
+
 # Note: In a confusion matrix, 'M' (Malignant) is our "positive" class.
 # We set 'M' to be the first level to ensure this.
 conf_matrix <- conf_mat(
@@ -194,7 +203,9 @@ conf_matrix <- conf_mat(
 )
 
 print(conf_matrix)
+```
 
+```{r}
 #Heatmap
 autoplot(conf_matrix, type = "heatmap")
 ```

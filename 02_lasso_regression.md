@@ -178,7 +178,15 @@ show_best(lasso_tune_results, metric = "accuracy")
 ``` r
 # Select the single best penalty value
 best_lasso_params <- select_best(lasso_tune_results, metric = "accuracy")
+best_lasso_params
+```
 
+    ## # A tibble: 1 × 2
+    ##   penalty .config              
+    ##     <dbl> <chr>                
+    ## 1 0.00356 Preprocessor1_Model38
+
+``` r
 #fit best model ^^ this is duplication of code from above, but worth seeing/saving the params. Can also fit with the params
 best_lasso_fit <- fit_best(lasso_tune_results)
 tidy(best_lasso_fit)
@@ -224,6 +232,7 @@ final_lasso_fit <- last_fit(
 ### 7. Review Performance Metrics
 
 Let’s see how our final tuned Lasso model performed on the test data.
+\## Model Metrics
 
 ``` r
 # 11. COLLECT METRICS
@@ -239,11 +248,25 @@ print(test_metrics)
     ## 2 roc_auc     binary        0.989  Preprocessor1_Model1
     ## 3 brier_class binary        0.0340 Preprocessor1_Model1
 
+## Accuracy, Sensitivity, Recall Metrics
+
 ``` r
 # Get the predictions to build a confusion matrix
 test_predictions <- collect_predictions(final_lasso_fit)
+ml_mets <- metric_set(accuracy, precision, recall)
+ml_mets(test_predictions, truth = diagnosis, estimate = .pred_class)
+```
 
-# Generate and print the confusion matrix
+    ## # A tibble: 3 × 3
+    ##   .metric   .estimator .estimate
+    ##   <chr>     <chr>          <dbl>
+    ## 1 accuracy  binary         0.951
+    ## 2 precision binary         0.936
+    ## 3 recall    binary         0.989
+
+## Generate and print the confusion matrix
+
+``` r
 # We again set positive = "M" for consistency
 conf_matrix <- conf_mat(
   test_predictions,
@@ -264,7 +287,7 @@ print(conf_matrix)
 autoplot(conf_matrix, type = "heatmap")
 ```
 
-![](_plot_images/metrics-1.png)<!-- -->
+![](_plot_images/unnamed-chunk-5-1.png)<!-- -->
 
 ### 8. Feature Importance (Interpretability)
 
