@@ -146,9 +146,12 @@ svm_tune_results <- tune_grid(
 
 # Show the top 5 best-performing hyperparameter sets
 show_best(svm_tune_results, metric = "accuracy")
+```
 
+```{r}
 # Select the single best set of parameters based on accuracy
 best_svm_params <- select_best(svm_tune_results, metric = "accuracy")
+best_svm_params
 ```
 
 ### 6. Finalize and Evaluate Model

@@ -219,7 +219,13 @@ show_best(svm_tune_results, metric = "accuracy")
 ``` r
 # Select the single best set of parameters based on accuracy
 best_svm_params <- select_best(svm_tune_results, metric = "accuracy")
+best_svm_params
 ```
+
+    ## # A tibble: 1 × 3
+    ##    cost rbf_sigma .config              
+    ##   <dbl>     <dbl> <chr>                
+    ## 1  21.5  0.000318 Preprocessor1_Model11
 
 ### 6. Finalize and Evaluate Model
 
@@ -304,7 +310,7 @@ print(conf_matrix)
 autoplot(conf_matrix, type = "heatmap")
 ```
 
-![](_plot_images/unnamed-chunk-5-1.png)<!-- -->
+![](_plot_images/unnamed-chunk-6-1.png)<!-- -->
 
 ### 8. Save Model Artifacts
 
