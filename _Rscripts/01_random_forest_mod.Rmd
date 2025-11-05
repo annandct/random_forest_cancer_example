@@ -1,6 +1,5 @@
 ---
 title: "01_random_forest_model"
-author: "You!"
 date: "2025-10-01"
 always_allow_html: true
 output:
@@ -19,15 +18,10 @@ source("../_templates/utility_functions.R")
 ```  
 
 
-# Analysis Scripts::
-
-- **Description:**
-    - Create two analysis scripts:
-        - **Script 1:** Initial descriptions of the breast cancer data set
-        - **Script 2:** Implement random forest algorithm using tidy models and R
-- **Code Organization:**
-    - Separate code for each script and analysis
-
+## Random Forest Implementation
+- Implement RF Model
+- Use cross Validation
+- Save model outpu
 
 ```{r libraries}
 # Load libraries
@@ -35,76 +29,31 @@ library(dplyr)
 library(tidymodels)  # For the core modeling workflow
 library(tidyverse)   # For general data manipulation and loading
 library(here)        # For robust file paths
-library(ggplot2)   # For visualization
+library(ggplot2)     # For visualization
+library(vip)         #variables of importance
+set.seed(8888) 
 ```
 
 ### Load & Prep Data
 ```{r}
 #load data
-raw_BCWDD <- read_csv(here("_data", "Breast Cancer Wisconsin Data.csv"))
-names(raw_BCWDD) <- gsub(names(raw_BCWDD), pattern = " ", replacement = "_")
-str(raw_BCWDD)
+cancer_data <- readRDS(here("_data", "cancer_data_processed.rds")) #processed in00 data_wrangling script.
+str(cancer_data)
 ```
 
-## Descriptive Summary of Data
-```{r}
-cancer_data <- raw_BCWDD %>% 
-  mutate(
-    # Convert the diagnosis column to a factor
-    # This is ESSENTIAL for classification models in tidymodels
-    diagnosis = as_factor(diagnosis)) %>% 
-    #diagnosis.fac_lab = factor(diagnosis, levels = c("B", "M"), labels=c("B", "M"))) # 'B' = Benign, 'M' = Malignant
-  select(-33) #remove unnamed column if present
-```
-
-## Viz
-```{r}
-#regression view of the diagnosis types
-cancer_data %>% mutate(diag_text = ifelse(diagnosis == "B", "Benign", "Malignant")) %>%
-  ggplot(aes(x=radius_mean, y =  texture_mean, color=diag_text)) +
-  geom_point(aes(size=area_mean)) +
-  geom_smooth(method="lm")+
-  labs(title="Mean Radius vs Mean Texture by Diagnosis Type",
-       x="Mean Radius",
-       y="Mean Texture",
-       color="Diagnosis Type") +
-  theme_minimal()
-
-```
-
-Visualization of three variables; Radius, Texture, Size - and there is already a reasonable visual separation between Benign and Malignant diagnosis. However, there is significant cross over in the middle of the chart. A typical regression model would have difficulty classifying cases in this area - and similarly a person trying to decide if they should operate on a potential cancerous growth would be in a coinflip situation. 
-
-This is where machine learning (particularly non-linear methods) that can incorporate more variables will start to shine in distinguishing the close match cases. However, visual intuition is often a good marker for how much we can undertand about how a model will make decisions. (Rule of 3). If we added in shapes or opacity based on other variables, the chart would become confusing, even as it might slightly emphasize the distinctino between Bening and Malignant cases. 
-
-```{r}
-#same chart - RANGE restricted to radius_mean 10:20 and texture_mean 15:30.
-cancer_data %>% mutate(diag_text = ifelse(diagnosis == "B", "Benign", "Malignant")) %>%
-  dplyr::filter(radius_mean >=10 & radius_mean <=20 & texture_mean >=15 & texture_mean <=30) %>%
-  ggplot(aes(x=radius_mean, y =  texture_mean, color=diag_text)) +
-  geom_point(aes(size=area_mean, alpha=compactness_mean)) +
-  geom_smooth(method="lm")+
-  labs(title="Mean Radius vs Mean Texture by Diagnosis Type (Zoomed In)",
-       x="Mean Radius",
-       y="Mean Texture",
-       color="Diagnosis Type") +
-  theme_minimal()
-```
-The updated chart is focused on the 'decision boundary' that will be explored in the ML models. Only one more variable has been added - compactness - mapped to opacity. The decision boundary is still quite fuzzy at best!
-
-
-
-## Minimal Random Forest Implementation
-```{r}
-# Set seed for reproducibility
-set.seed(8888)
-```
-
+### 2. Data Splitting
 ```{r data-split and k-folds}
-# Split the data into training and testing sets
+# 3. DATA SPLITTING
+# Create the stratified data split (75% training, 25% testing)
 data_split <- initial_split(cancer_data, prop = 0.75, strata = diagnosis)
+
 # Create the training and testing data frames
 train_data <- training(data_split)
 test_data  <- testing(data_split)
+
+# Check the proportions in each set
+train_data %>% count(diagnosis) %>% mutate(prop = n/sum(n))
+test_data %>% count(diagnosis) %>% mutate(prop = n/sum(n))
 ```
 
 ## fit a single model
@@ -169,8 +118,139 @@ rf_predictions %>%
 
 - This is the same as above, but a **workflow** is put into place to evaluate the (already quite good) random forest algorithm across multiple parameters. This is the best practice for improving accuracy. 
 ```{r}
+#set.seed(8888)
 # Create 10-fold cross-validation folds from the training data
 cv_folds <- vfold_cv(train_data, v = 10, strata = diagnosis)
-
 ```
 
+### Model Specification for Tuning
+
+We will tune `mtry` (number of predictors per split) and `min_n` (minimum node size). We'll set the engine to `ranger` for speed and to enable variable importance.
+
+```{r rf-spec-tune}
+# Define the random forest model, but with tunable parameters
+rf_spec_tune <- rand_forest(
+  mtry = tune(),
+  trees = 1000, # 1000 trees is usually enough, no need to tune
+  min_n = tune()
+) %>%
+  set_engine("ranger", importance = "permutation") %>% # Set importance for vip
+  set_mode("classification")
+```
+
+### Recipe and Workflow
+
+Update the recipe with the tuning step, and tunable model (ranger model)
+
+```{r rf-workflow-tune}
+rf_recipe <- recipe(diagnosis ~ ., data = train_data) %>%
+  update_role(id, new_role = "ID") %>% # Keep ID but don't use it
+  step_normalize(all_numeric_predictors())
+
+# Create a new workflow for *tuning*
+rf_workflow_tune <- workflow() %>%
+  add_model(rf_spec_tune) %>%
+  add_recipe(rf_recipe)
+```
+
+### Hyperparameter Tuning
+
+Now we run the tuning process across our 10 CV folds.
+
+```{r rf-run-tuning}
+# Create a grid of hyperparameters to try
+rf_grid <- grid_latin_hypercube(
+  mtry(range = c(1, 30)), # Try values for mtry from 1 to 30
+  min_n(range = c(2, 20)), # Try values for min_n from 2 to 20
+  size = 20
+)
+
+# Run the tuning
+rf_tune_results <- tune_grid(
+  rf_workflow_tune,
+  resamples = cv_folds,
+  grid = rf_grid,
+  #metrics = metric_set(accuracy, precision, recall),
+  control = control_grid(save_workflow=TRUE)
+)
+
+# Show the top 5 best-performing hyperparameter sets
+show_best(rf_tune_results, metric = "accuracy")
+
+# Select the single best set of parameters
+best_rf_params <- select_best(rf_tune_results, metric = "accuracy")
+
+#
+```
+
+### Finalize and Evaluate Model
+
+With our best parameters, we do a `last_fit()` to get our final, unbiased test metrics.
+
+```{r rf-final-fit}
+# Finalize the workflow with the best parameters
+final_rf_workflow <- finalize_workflow(
+  rf_workflow_tune,
+  best_rf_params
+)
+
+# Use 'last_fit' to fit on the full training set and evaluate on the test set
+final_rf_fit <- last_fit(
+  final_rf_workflow,
+  data_split
+)
+```
+
+### Review Performance Metrics
+
+Let's see how our *tuned* model performed on the test data.
+
+```{r rf-final-metrics}
+# Get the metrics from our test-set evaluation
+test_metrics <- collect_metrics(final_rf_fit)
+
+# Get the predictions to build a confusion matrix
+test_predictions <- collect_predictions(final_rf_fit)
+
+# Generate and print the confusion matrix
+conf_matrix <- conf_mat(
+  test_predictions,
+  truth = diagnosis,
+  estimate = .pred_class,
+  options = list(positive = "M") # Set positive = "M"
+)
+
+print(conf_matrix)
+autoplot(conf_matrix, type = "heatmap")
+```
+
+### Feature Importance
+
+This is a key benefit of Random Forest. We can see which variables the model used most to make its decisions.
+
+```{r rf-vip}
+#library(vip)
+# Extract the fitted model object
+fitted_rf_model <- extract_workflow(final_rf_fit)
+best_rf_fit <- fit_best(rf_tune_results)
+
+# Use the 'vip' package to create a variable importance plot
+print("Plotting Variable Importance...")
+vip(fitted_rf_model, num_features = 20) +
+  labs(title = "Random Forest Variable Importance")
+```
+
+### Save Model Artifacts
+```{r rf-save-artifacts}
+# Save the final, fitted workflow
+saveRDS(
+  list("model" = final_rf_fit, "metrics" = test_metrics, "preds" = test_predictions),
+  file = here("_models", "final_rf_output.rds")
+)
+
+## Save the test metrics
+#saveRDS(
+#  test_metrics,
+#  file = here("_models", "rf_test_metrics.rds")
+#)
+```

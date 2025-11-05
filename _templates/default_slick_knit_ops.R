@@ -5,9 +5,14 @@
   base_url = "",
   fig_path = "../_plot_images/", 
   cache_path = "../_cache/", 
+  #knit_options
   message = FALSE, 
   warning = FALSE, 
-  cache = FALSE) {
+  cache = FALSE) #end arguments
+  {
+  
+  knitr::opts_knit$set(base.dir = base_dir, base.url = base_url)
+  
   knitr::opts_chunk$set(fig.path = fig_path,
                         cache.path = cache_path,  
                         message = message, 
@@ -23,8 +28,6 @@
                     "Cache: ", cache, "\n")))
   }
 }
-
-.default_slick_knit_ops(verbose=FALSE)
 
 # Example usage:
 #.base_dir <- "../" 

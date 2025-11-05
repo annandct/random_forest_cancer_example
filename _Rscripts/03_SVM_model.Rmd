@@ -1,6 +1,5 @@
 ---
 title: "02_lasso_regression.md"
-author: "You!"
 date: "2025-10-31"
 always_allow_html: true
 output:
@@ -16,16 +15,6 @@ knit: (function(inputFile, encoding) {
 ```{r setup, include=FALSE}
 source("../_templates/utility_functions.R")
 .default_slick_knit_ops(verbose=TRUE)
-# 
-# base_dir <- "../" # where output should default to
-# base_url <- "" # keep as is
-# fig_path <- "_plot_images/" # where image output should go
-# 
-# knitr::opts_knit$set(base.dir = base_dir)
-# knitr::opts_chunk$set(fig.path = fig_path,
-#                       cache.path = '../cache/',  #log files go here
-#                       message=FALSE, warning=FALSE,
-#                       cache = TRUE) 
 ```  
 
 This script implements Step 4 of the project proposal: fitting and tuning a non-linear Support Vector Machine (SVM) model with a Radial Basis Function (RBF) kernel.
@@ -37,6 +26,7 @@ library(tidyverse)   # For general data manipulation and loading
 library(here)        # For robust file paths
 library(kernlab)     # The 'engine' for SVM calculations
 library(conflicted)  # To manage function name conflicts
+library(vip)         #variables of importance
 
 # Set a seed for reproducibility
 set.seed(8888) 
@@ -49,35 +39,16 @@ Model 3 (SVM): Implement Support Vector Machines
   - Evaluate using metrics/comparisons for SVM performance on BCWDD (Breast Cancer Diagnosis Dataset).
   - Evaluate Model Output, consideration. Indications of critical variables etc...
 
-### 1. Load and Prepare Data
+### 1. Load Data
 
-Load the cleaned data from the `01_data_wrangling.Rmd` script. The most important step here is converting our `diagnosis` variable to a **factor**, which `tidymodels` requires for classification.
-
-```{r load-data}
-# 2. LOAD DATA
-# Load the cleaned data from the _data folder
-raw_BCWDD <- read_csv(here("_data", "Breast Cancer Wisconsin Data.csv"))
-
-names(raw_BCWDD) <- gsub(names(raw_BCWDD), pattern = " ", replacement = "_")
-
-cancer_data <- raw_BCWDD %>% 
-  mutate(
-    # Convert the diagnosis column to a factor
-    # This is ESSENTIAL for classification models in tidymodels
-    diagnosis = as_factor(diagnosis)) %>% 
-    #diagnosis.fac_lab = factor(diagnosis, levels = c("B", "M"), labels=c("B", "M"))) # 'B' = Benign, 'M' = Malignant
-  select(-33) #remove unnamed column if present
-
-
-#str(cancer_data$diagnosis)
-#str(cancer_data$diagnosis.fac_lab)
-
-glimpse(cancer_data)
+```{r}
+#load data
+cancer_data <- readRDS(here("_data", "cancer_data_processed.rds")) #processed in00 data_wrangling script.
+str(cancer_data)
 ```
-
 ### 2. Data Splitting
 
-We will perform a stratified split to ensure our training and testing sets both have a similar proportion of Malignant ('M') and Benign ('B') cases.
+We use the same stratified split parameters and seed as the SVM script to ensure the train/test sets are identical.
 
 ```{r data-split}
 # 3. DATA SPLITTING
@@ -203,48 +174,14 @@ final_svm_fit <- last_fit(
 ```
 
 ### 7. Review Performance Metrics
-
-Let's see how our final model performed on the test data. We will look at the key metrics requested in the proposal.
-- Predict on the test set. 
-- Evaluate metrics against preds and actual diagnoses.
-
+Compare *tuned* model to test data
 ```{r metrics}
-best_svm_fit <- fit_best(svm_tune_results) #best fit model
-best_predictions <- predict(best_svm_fit, test_data) %>% 
-  bind_cols(test_data %>% select(diagnosis))
-
-# Performance Metrics - How Does the Model actually do on the test set.
-# Metrics from ML Course
-ml_mets <- metric_set(accuracy, precision, recall)
-
-svm_ml_metrics <- ml_mets(best_predictions,
-        truth = diagnosis, estimate = .pred_class, metrics = ml_mets) %>% pivot_wider(names_from = .metric, values_from = .estimate)
-
-svm_ml_metrics
-
-f1_score <- function(metrics_data){
-  2 * metrics_data$precision * metrics_data$recall / (metrics_data$precision + metrics_data$recall)
-  }
-
-f1_score(svm_ml_metrics)
-
-```
-
-```{r}
-# 11. COLLECT METRICS
 # Get the metrics from our test-set evaluation
 test_metrics <- collect_metrics(final_svm_fit)
 print(test_metrics)
 
 # Get the predictions to build a confusion matrix
 test_predictions <- collect_predictions(final_svm_fit)
-
-#metrics from preds
-# Metrics from ML Course
-ml_mets <- metric_set(accuracy, precision, recall)
-
-#svm_metrics <- test_predictions %>% mutate(diagnosis = factor(diagnosis, levels = c("B", "M"))) %>%
-#  metrics(truth = diagnosis, estimate = .pred_class)
 
 # Generate and print the confusion matrix
 # Note: In a confusion matrix, 'M' (Malignant) is our "positive" class.
@@ -258,29 +195,19 @@ conf_matrix <- conf_mat(
 
 print(conf_matrix)
 
-# You can also autoplot the confusion matrix
+#Heatmap
 autoplot(conf_matrix, type = "heatmap")
 ```
 
 ### 8. Save Model Artifacts
 
-Finally, we save the trained workflow (which includes the preprocessing recipe) and the performance metrics. This allows us to load them later in our final comparison script without re-running this entire file.
-
 ```{r save-artifacts}
 # 12. SAVE ARTIFACTS
 # Save the final, fitted workflow
 saveRDS(
-  final_svm_fit,
-  file = here("_models", "final_svm_fit.rds")
+  list("model" = final_svm_fit, "metrics" = test_metrics, "preds" = test_predictions),
+  file = here("_models", "final_svm_output.rds")
 )
-
-# Save the test metrics
-saveRDS(
-  test_metrics,
-  file = here("_models", "svm_test_metrics.rds")
-)
-
-print("SVM model and metrics saved successfully.")
 ```
 
 

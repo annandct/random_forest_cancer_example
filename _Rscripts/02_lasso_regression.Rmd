@@ -1,6 +1,5 @@
 ---
 title: "02_lasso_regression.md"
-author: "You!"
 date: "2025-10-31"
 always_allow_html: true
 output:
@@ -16,16 +15,6 @@ knit: (function(inputFile, encoding) {
 ```{r setup, include=FALSE}
 source("../_templates/utility_functions.R")
 .default_slick_knit_ops(verbose=TRUE)
-# 
-# base_dir <- "../" # where output should default to
-# base_url <- "" # keep as is
-# fig_path <- "_plot_images/" # where image output should go
-# 
-# knitr::opts_knit$set(base.dir = base_dir)
-# knitr::opts_chunk$set(fig.path = fig_path,
-#                       cache.path = '../cache/',  #log files go here
-#                       message=FALSE, warning=FALSE,
-#                       cache = TRUE) 
 ```  
 
 ## OUTLINE OF ANALYSIS 
@@ -37,7 +26,7 @@ Proposed Method 2:
   - The resulting model's coefficients will be analyzed to produce a ranked list of the most important diagnostic features.
 
 
-```{r setup, include=FALSE}
+```{r libraries}
 
 # 1. SETUP LIBRARIES
 library(tidymodels)  # For the core modeling workflow
@@ -53,30 +42,11 @@ set.seed(8888)
 
 ### 1. Load and Prepare Data
 
-Load the cleaned data and convert `diagnosis` to a factor for classification.
-
-```{r load-data}
-# 2. LOAD DATA
-# Load the cleaned data from the _data folder
-raw_BCWDD <- read_csv(here("_data", "Breast Cancer Wisconsin Data.csv"))
-
-names(raw_BCWDD) <- gsub(names(raw_BCWDD), pattern = " ", replacement = "_")
-
-cancer_data <- raw_BCWDD %>% 
-  mutate(
-    # Convert the diagnosis column to a factor
-    # This is ESSENTIAL for classification models in tidymodels
-    diagnosis = as_factor(diagnosis)) %>% 
-    #diagnosis.fac_lab = factor(diagnosis, levels = c("B", "M"), labels=c("B", "M"))) # 'B' = Benign, 'M' = Malignant
-  select(-33) #remove unnamed column if present
-
-
-#str(cancer_data$diagnosis)
-#str(cancer_data$diagnosis.fac_lab)
-
-glimpse(cancer_data)
+```{r}
+#load data
+cancer_data <- readRDS(here("_data", "cancer_data_processed.rds")) #processed in00 data_wrangling script.
+str(cancer_data)
 ```
-
 ### 2. Data Splitting
 
 We use the same stratified split parameters and seed as the SVM script to ensure the train/test sets are identical.
@@ -143,13 +113,13 @@ lasso_workflow <- workflow() %>%
 # 8. HYPERPARAMETER TUNING
 # Create a grid of 50 different 'penalty' (lambda) values to try
 lasso_grid <- grid_regular(penalty(), levels = 50)
-ctrl <- control_grid(save_workflow = TRUE)
+#ctrl <- control_grid(save_workflow = TRUE)
 # Run the tuning process
 lasso_tune_results <- tune_grid(
   lasso_workflow,
   resamples = cv_folds,
   grid = lasso_grid,
-  control = ctrl,
+  control = control_grid(save_workflow = TRUE),
   metrics = metric_set(accuracy, precision, recall))
 
 # Show the top 5 best-performing penalty values
@@ -160,6 +130,7 @@ best_lasso_params <- select_best(lasso_tune_results, metric = "accuracy")
 
 #fit best model ^^ this is duplication of code from above, but worth seeing/saving the params. Can also fit with the params
 best_lasso_fit <- fit_best(lasso_tune_results)
+tidy(best_lasso_fit)
 ```
 
 ### 6. Finalize and Evaluate Model
@@ -170,12 +141,10 @@ We update our workflow with the *best* penalty and fit it to the full training s
 # 9. FINALIZE WORKFLOW
 # Update the workflow with the best penalty we just found
 # same as best_lasso_fit...
-final_lasso_workflow <- finalize_workflow(lasso_tune_results,
+final_lasso_workflow <- finalize_workflow(lasso_workflow,
   #lasso_workflow,
   best_lasso_params
 ) 
-
-wflow_fit <- fit(final_lasso_workflow, train_data)
 
 # 10. FIT ON TRAIN, EVALUATE ON TEST
 # Use 'last_fit' to fit on the full training set and evaluate on the test set
@@ -217,18 +186,14 @@ This is the key step for the Lasso model. We will extract the coefficients from 
 
 ```{r vip}
 # 12. EXTRACT FEATURE IMPORTANCE
+#library(vip)
 # Extract the fitted model object
-fitted_lasso_model <- pull_workflow_fit(final_lasso_fit)
-
-best_lasso_fit <- fit_best(lasso_tune_results)
-wflow_fit <- fit(final_lasso_workflow, train_data)
-
-caret::varImp(object = final_lasso_fit)
+fitted_lasso_model <- extract_workflow(final_lasso_fit)
 
 # Use the 'vip' package to create a variable importance plot
 # This shows the non-zero coefficients
 print("Plotting Variable Importance...")
-vip(best_lasso_fit, num_features = 30) +
+vip(fitted_lasso_model, num_features = 20) +
   labs(title = "Lasso Variable Importance",
        subtitle = "Features with non-zero coefficients")
 
@@ -240,22 +205,12 @@ tidy(best_lasso_fit) %>%
 ```
 
 ### 9. Save Model Artifacts
-
-Finally, we save the trained workflow and the performance metrics for our final comparison.
-
 ```{r save-artifacts}
 # 13. SAVE ARTIFACTS
 # Save the final, fitted workflow
 saveRDS(
-  final_lasso_fit,
-  file = here("_models", "final_lasso_fit.rds")
+  list("model" = final_lasso_fit, "metrics" = test_metrics, "preds" = test_predictions),
+  file = here("_models", "final_lasso_output.rds")
 )
 
-# Save the test metrics
-saveRDS(
-  test_metrics,
-  file = here("_models", "lasso_test_metrics.rds")
-)
-
-print("Lasso model and metrics saved successfully.")
 ```

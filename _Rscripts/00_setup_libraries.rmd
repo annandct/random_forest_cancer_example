@@ -18,7 +18,7 @@ title: "00_setup_libraries"
 
 base_dir <- "../" # where output should default to
 base_url <- "" # keep as is
-fig_path <- "plot_images/" # where image output should go
+fig_path <- "_plot_images/" # where image output should go
 
 knitr::opts_knit$set(base.dir = base_dir)
 knitr::opts_chunk$set(fig.path = fig_path,
