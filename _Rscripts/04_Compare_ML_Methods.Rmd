@@ -16,16 +16,16 @@ knit: (function(inputFile, encoding) {
 ```{r setup, include=FALSE}
 source("../_templates/utility_functions.R")
 .default_slick_knit_ops(verbose=TRUE)
-
-base_dir <- "../" # where output should default to
-base_url <- "" # keep as is
-fig_path <- "_plot_images/" # where image output should go
-
-knitr::opts_knit$set(base.dir = base_dir)
-knitr::opts_chunk$set(fig.path = fig_path,
-                      cache.path = '../cache/',  #log files go here
-                      message=FALSE, warning=FALSE,
-                      cache = TRUE) 
+# 
+# base_dir <- "../" # where output should default to
+# base_url <- "" # keep as is
+# fig_path <- "_plot_images/" # where image output should go
+# 
+# knitr::opts_knit$set(base.dir = base_dir)
+# knitr::opts_chunk$set(fig.path = fig_path,
+#                       cache.path = '../cache/',  #log files go here
+#                       message=FALSE, warning=FALSE,
+#                       cache = TRUE) 
 ```  
 
 ## Compare Machine Learning Methods

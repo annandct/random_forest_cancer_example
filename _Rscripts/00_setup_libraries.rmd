@@ -13,6 +13,9 @@ title: "00_setup_libraries"
 ---
 
 ```{r setup, include=FALSE}
+# source("../_templates/utility_functions.R")
+# .default_slick_knit_ops(verbose=TRUE)
+
 base_dir <- "../" # where output should default to
 base_url <- "" # keep as is
 fig_path <- "plot_images/" # where image output should go

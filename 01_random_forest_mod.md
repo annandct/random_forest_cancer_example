@@ -1,9 +1,9 @@
 1_data_wrangling
 ================
-CTA-PHD-DWZ
+You!
 2025-10-01
 
-# Analysis Scripts:: Colin T. Annand - Ph.D., D.WZ.
+# Analysis Scripts::
 
 - **Description:**
   - Create two analysis scripts:
@@ -92,7 +92,7 @@ raw_dat %>% mutate(diag_text = ifelse(diagnosis=="B", "Benign", "Malignant")) %>
   theme_minimal()
 ```
 
-![](_plot_images/unnamed-chunk-4-1.png)<!-- --> \### Comment-CTA:: -
+![](../_plot_images/unnamed-chunk-4-1.png)<!-- --> \### Comment-CTA:: -
 Already we are seeing reasonable separation between the BENING and
 MALIGNANT groups based on just a few of these variables… - Dataset
 likely would need dimens reduction.
@@ -170,12 +170,11 @@ rf_predictions %>%
   labs(title = "Random Forest Predictions: Probability of Malignant",
        x = "Predicted Probability of Malignant",
        y = "Count",
-       fill = "Actual Diagnosis",
-       caption = "Plot by Colin T. Annand") +
+       fill = "Actual Diagnosis") +
   theme_minimal()
 ```
 
-![](_plot_images/unnamed-chunk-13-1.png)<!-- --> \### CTA Comments -
-This bar plot is showing the model predictions vs accuracy. Essentially,
-the SMALL OVERLAP in the light Blue (M) for malignant is showing where
-the model classified a BENIGN tumor as Malignant.
+![](../_plot_images/unnamed-chunk-13-1.png)<!-- --> **Comments** - This
+bar plot is showing the model predictions vs accuracy. Essentially, the
+SMALL OVERLAP in the light Blue (M) for malignant is showing where the
+model classified a BENIGN tumor as Malignant.
