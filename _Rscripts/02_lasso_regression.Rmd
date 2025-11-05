@@ -30,109 +30,232 @@ knitr::opts_chunk$set(fig.path = fig_path,
 
 ## OUTLINE OF ANALYSIS 
 
-Step 3 (Implement Lasso): Implement Lasso Logistic Regression. 
+Proposed Method 2: 
+  - (Implement Lasso): Implement Lasso Logistic Regression. 
+  - Use Lasso (L1) Logistic Regression, specifically to see if a sparse model can be interpretable for this dataset without sacrificing too much accuracy. 
   - Use cross-validation to select the optimal regularization parameter (lambda). 
   - The resulting model's coefficients will be analyzed to produce a ranked list of the most important diagnostic features.
 
-```{r}
-# Load libraries
-library(dplyr)
-library(tidymodels)
-library(yardstick)
-library(ggplot2)
+
+```{r setup, include=FALSE}
+
+# 1. SETUP LIBRARIES
+library(tidymodels)  # For the core modeling workflow
+library(tidyverse)   # For general data manipulation and loading
+library(here)        # For robust file paths
+library(glmnet)      # The 'engine' for penalized regression
+library(vip)         # For variable importance plots
+library(conflicted)  # To manage function name conflicts
+
+# Set seed: 
+set.seed(8888) 
 ```
 
-## Load Data
-```{r}
-#load data
-raw_dat <- read.csv("../_data/Breast Cancer Wisconsin Data.csv")
-str(raw_dat)
+### 1. Load and Prepare Data
+
+Load the cleaned data and convert `diagnosis` to a factor for classification.
+
+```{r load-data}
+# 2. LOAD DATA
+# Load the cleaned data from the _data folder
+raw_BCWDD <- read_csv(here("_data", "Breast Cancer Wisconsin Data.csv"))
+
+names(raw_BCWDD) <- gsub(names(raw_BCWDD), pattern = " ", replacement = "_")
+
+cancer_data <- raw_BCWDD %>% 
+  mutate(
+    # Convert the diagnosis column to a factor
+    # This is ESSENTIAL for classification models in tidymodels
+    diagnosis = as_factor(diagnosis)) %>% 
+    #diagnosis.fac_lab = factor(diagnosis, levels = c("B", "M"), labels=c("B", "M"))) # 'B' = Benign, 'M' = Malignant
+  select(-33) #remove unnamed column if present
+
+
+#str(cancer_data$diagnosis)
+#str(cancer_data$diagnosis.fac_lab)
+
+glimpse(cancer_data)
 ```
 
-```{r}
-data.m <- raw_dat %>% mutate(
-  diag_text = ifelse(diagnosis=="B", "Benign", "Malignant"),
-  diag_text = as.factor(diag_text)
-) %>%
-  select(-id, -diagnosis)
+### 2. Data Splitting
 
-glimpse(data.m)
+We use the same stratified split parameters and seed as the SVM script to ensure the train/test sets are identical.
+
+```{r data-split}
+# 3. DATA SPLITTING
+# Create the stratified data split (75% training, 25% testing)
+data_split <- initial_split(cancer_data, prop = 0.75, strata = diagnosis)
+
+# Create the training and testing data frames
+train_data <- training(data_split)
+test_data  <- testing(data_split)
+
+# Check the proportions in each set
+train_data %>% count(diagnosis) %>% mutate(prop = n/sum(n))
+test_data %>% count(diagnosis) %>% mutate(prop = n/sum(n))
 ```
 
-## Pre process numeric vars for LAsso Regression
-- If needed
+### 3. Preprocessing Recipe
 
+This recipe is nearly identical to the SVM one. Scaling and centering are **critical** for Lasso regression, as the penalty is applied directly to the coefficients' values.
 
-```{r}
-numeric_vars <- data.m %>%
-  select(where(is.numeric))
+```{r recipe}
+# 4. PREPROCESSING RECIPE
+# We are predicting 'diagnosis' using all other variables (.).
+# The only predictor we *don't* want is 'id', so we remove it.
+# We then normalize (center and scale) ALL numeric predictors.
+lasso_recipe <- recipe(diagnosis ~ ., data = train_data) %>%
+  update_role(id, new_role = "ID") %>% # Keep ID but don't use it
+  step_normalize(all_numeric_predictors()) # Center and scale
+
 ```
 
-```{r}
-# Standardize numeric variables
-numeric_vars_scaled <- as.data.frame(scale(numeric_vars))
+### 4. Cross-Validation Folds
+
+We create the *exact same* 10-fold cross-validation folds from our training data, as the `set.seed()` was identical.
+
+```{r cv-folds}
+# 5. CROSS-VALIDATION FOLDS
+# Create 10-fold cross-validation folds from the training data
+cv_folds <- vfold_cv(train_data, v = 10, strata = diagnosis)
 ```
 
-## Import Lasso Regression Libraries
+### 5. Model Specification & Tuning
 
-```{r}
-#lasso libraries
-library(tidymodels)
-#install.packages("glmnet")
-library(glmnet)
-#install.packages("caret")
-library(caret)
-```
+Here we define the `logistic_reg` model. We set `mixture = 1` to specify *pure Lasso* (L1 penalty) and tell `tidymodels` we want to `tune()` the `penalty` (lambda) parameter.
 
-## Setup Lasso Regression Model
-```{r}
-#setup lasso regression model
+```{r model-spec}
+# 6. MODEL SPECIFICATION
+# We specify a logistic regression model.
+# 'mixture = 1' makes it a pure Lasso model (L1 penalty).
+# We set the 'engine' to 'glmnet'.
+# We will tune the 'penalty' (lambda) hyperparameter.
 lasso_spec <- logistic_reg(penalty = tune(), mixture = 1) %>%
-  set_engine("glmnet")
-```
+  set_engine("glmnet") %>%
+  set_mode("classification")
 
-## tidymodels workflow set
-```{r}
+# 7. CREATE WORKFLOW
+# Combine the recipe and model spec
 lasso_workflow <- workflow() %>%
-  add_model(lasso_spec) %>%
-  add_formula(diag_text ~ .)
-```
+  add_recipe(lasso_recipe) %>%
+  add_model(lasso_spec)
 
-```{r}
-# Cross-validation
-set.seed(123)
-cv_folds <- vfold_cv(data.m, v = 10, strata = diag_text)
-```
-
-```{r}
-# Hyperparameter tuning
+# 8. HYPERPARAMETER TUNING
+# Create a grid of 50 different 'penalty' (lambda) values to try
 lasso_grid <- grid_regular(penalty(), levels = 50)
-
-```
-
-```{r}
-#show possible evaluation metrics --> YARDSTICK
-library(yardstick)
-metrics.sel = metric_set(roc_auc, accuracy)
-```
-
-
-```{r}
-lasso_tune <- tune_grid(
+ctrl <- control_grid(save_workflow = TRUE)
+# Run the tuning process
+lasso_tune_results <- tune_grid(
   lasso_workflow,
   resamples = cv_folds,
   grid = lasso_grid,
-  metrics = metrics.sel
+  control = ctrl,
+  metrics = metric_set(accuracy, precision, recall))
+
+# Show the top 5 best-performing penalty values
+show_best(lasso_tune_results, metric = "accuracy")
+
+# Select the single best penalty value
+best_lasso_params <- select_best(lasso_tune_results, metric = "accuracy")
+
+#fit best model ^^ this is duplication of code from above, but worth seeing/saving the params. Can also fit with the params
+best_lasso_fit <- fit_best(lasso_tune_results)
+```
+
+### 6. Finalize and Evaluate Model
+
+We update our workflow with the *best* penalty and fit it to the full training set, then evaluate on the test set.
+
+```{r final-fit}
+# 9. FINALIZE WORKFLOW
+# Update the workflow with the best penalty we just found
+# same as best_lasso_fit...
+final_lasso_workflow <- finalize_workflow(lasso_tune_results,
+  #lasso_workflow,
+  best_lasso_params
+) 
+
+wflow_fit <- fit(final_lasso_workflow, train_data)
+
+# 10. FIT ON TRAIN, EVALUATE ON TEST
+# Use 'last_fit' to fit on the full training set and evaluate on the test set
+final_lasso_fit <- last_fit(
+  final_lasso_workflow,
+  data_split
 )
 ```
 
-## Create a Confusion Matric for the model predictions
-```{r}
-#confusion matrix
+### 7. Review Performance Metrics
 
-lasso_best <- lasso_tune %>%
-  select_best()
+Let's see how our final tuned Lasso model performed on the test data.
+
+```{r metrics}
+# 11. COLLECT METRICS
+# Get the metrics from our test-set evaluation
+test_metrics <- collect_metrics(final_lasso_fit)
+print(test_metrics)
+
+# Get the predictions to build a confusion matrix
+test_predictions <- collect_predictions(final_lasso_fit)
+
+# Generate and print the confusion matrix
+# We again set positive = "M" for consistency
+conf_matrix <- conf_mat(
+  test_predictions,
+  truth = diagnosis,
+  estimate = .pred_class,
+  options = list(positive = "M") 
+)
+
+print(conf_matrix)
+autoplot(conf_matrix, type = "heatmap")
 ```
 
+### 8. Feature Importance (Interpretability)
 
+This is the key step for the Lasso model. We will extract the coefficients from our final model to see which features it "kept" (gave a non-zero coefficient) and which it "threw away" (set to zero).
 
+```{r vip}
+# 12. EXTRACT FEATURE IMPORTANCE
+# Extract the fitted model object
+fitted_lasso_model <- pull_workflow_fit(final_lasso_fit)
+
+best_lasso_fit <- fit_best(lasso_tune_results)
+wflow_fit <- fit(final_lasso_workflow, train_data)
+
+caret::varImp(object = final_lasso_fit)
+
+# Use the 'vip' package to create a variable importance plot
+# This shows the non-zero coefficients
+print("Plotting Variable Importance...")
+vip(best_lasso_fit, num_features = 30) +
+  labs(title = "Lasso Variable Importance",
+       subtitle = "Features with non-zero coefficients")
+
+# We can also 'tidy' the model to see the coefficients as a data frame
+print("Model Coefficients:")
+tidy(best_lasso_fit) %>%
+  dplyr::filter(estimate != 0) %>%  # Filter to show only non-zero features
+  arrange(desc(abs(estimate))) # Sort by importance
+```
+
+### 9. Save Model Artifacts
+
+Finally, we save the trained workflow and the performance metrics for our final comparison.
+
+```{r save-artifacts}
+# 13. SAVE ARTIFACTS
+# Save the final, fitted workflow
+saveRDS(
+  final_lasso_fit,
+  file = here("_models", "final_lasso_fit.rds")
+)
+
+# Save the test metrics
+saveRDS(
+  test_metrics,
+  file = here("_models", "lasso_test_metrics.rds")
+)
+
+print("Lasso model and metrics saved successfully.")
+```

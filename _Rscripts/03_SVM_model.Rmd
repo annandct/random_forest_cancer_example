@@ -28,62 +28,259 @@ knitr::opts_chunk$set(fig.path = fig_path,
                       cache = TRUE) 
 ```  
 
+This script implements Step 4 of the project proposal: fitting and tuning a non-linear Support Vector Machine (SVM) model with a Radial Basis Function (RBF) kernel.
+
+```{r libraries}
+
+library(tidymodels)  # For the core modeling workflow
+library(tidyverse)   # For general data manipulation and loading
+library(here)        # For robust file paths
+library(kernlab)     # The 'engine' for SVM calculations
+library(conflicted)  # To manage function name conflicts
+
+# Set a seed for reproducibility
+set.seed(8888) 
+```
+
 ## OUTLINE OF ANALYSIS 
 
-Step # (Implement SVM): Implement Support Vector Machines 
+Model 3 (SVM): Implement Support Vector Machines 
   - Use k-fold cross-validation.
   - Evaluate using metrics/comparisons for SVM performance on BCWDD (Breast Cancer Diagnosis Dataset).
   - Evaluate Model Output, consideration. Indications of critical variables etc...
 
-```{r}
-# Load libraries
-library(dplyr)
-library(tidymodels)
-library(recipes)
-library(yardstick)
-library(ggplot2)
+### 1. Load and Prepare Data
+
+Load the cleaned data from the `01_data_wrangling.Rmd` script. The most important step here is converting our `diagnosis` variable to a **factor**, which `tidymodels` requires for classification.
+
+```{r load-data}
+# 2. LOAD DATA
+# Load the cleaned data from the _data folder
+raw_BCWDD <- read_csv(here("_data", "Breast Cancer Wisconsin Data.csv"))
+
+names(raw_BCWDD) <- gsub(names(raw_BCWDD), pattern = " ", replacement = "_")
+
+cancer_data <- raw_BCWDD %>% 
+  mutate(
+    # Convert the diagnosis column to a factor
+    # This is ESSENTIAL for classification models in tidymodels
+    diagnosis = as_factor(diagnosis)) %>% 
+    #diagnosis.fac_lab = factor(diagnosis, levels = c("B", "M"), labels=c("B", "M"))) # 'B' = Benign, 'M' = Malignant
+  select(-33) #remove unnamed column if present
+
+
+#str(cancer_data$diagnosis)
+#str(cancer_data$diagnosis.fac_lab)
+
+glimpse(cancer_data)
 ```
 
-## Load Data
+### 2. Data Splitting
+
+We will perform a stratified split to ensure our training and testing sets both have a similar proportion of Malignant ('M') and Benign ('B') cases.
+
+```{r data-split}
+# 3. DATA SPLITTING
+# Create the stratified data split (75% training, 25% testing)
+data_split <- initial_split(cancer_data, prop = 0.75, strata = diagnosis)
+
+# Create the training and testing data frames
+train_data <- training(data_split)
+test_data  <- testing(data_split)
+
+# Check the proportions in each set
+train_data %>% count(diagnosis) %>% mutate(prop = n/sum(n))
+test_data %>% count(diagnosis) %>% mutate(prop = n/sum(n))
+```
+
+### 3. Preprocessing Recipe
+
+We define our preprocessing steps. For an SVM, it is **critical** that we `step_scale()` and `step_center()` all numeric predictors. The recipe will be *trained* on the training data and *applied* to both train and test sets.
+
+```{r recipe}
+# 4. PREPROCESSING RECIPE
+# We are predicting 'diagnosis' using all other variables (.).
+# The only predictor we *don't* want is 'id', so we remove it.
+# We then center and scale ALL numeric predictors.
+svm_recipe <- recipe(diagnosis ~ ., data = train_data) %>%
+  update_role(id, new_role = "ID") %>% # Keep ID but don't use it as a predictor
+  step_normalize(all_numeric_predictors()) # Centers and scales
+
+# You can check the recipe
+# summary(svm_recipe)
+```
+
+### 4. Cross-Validation Folds
+
+We create 10-fold cross-validation folds from our *training data*. This will be used to tune the model's hyperparameters.
+
+```{r cv-folds}
+# 5. CROSS-VALIDATION FOLDS
+# Create 10-fold cross-validation folds from the training data
+cv_folds <- vfold_cv(train_data, v = 10, strata = diagnosis)
+```
+
+### Working out the Model fit code
+
 ```{r}
-#load data
-raw_dat <- read.csv("../_data/Breast Cancer Wisconsin Data.csv")
-str(raw_dat)
+#run a single SVM fit
+svm_fit <- svm_rbf(cost = 1, rbf_sigma = 0.1) %>%
+  set_mode("classification") %>%
+  set_engine("kernlab") %>%
+  #fit(diagnosisdata = train_data)
+  fit(diagnosis ~ ., data = train_data %>% select(-id))
+
+summary(svm_fit)
+preds <- predict(object = svm_fit, train_data)
+compare <- data.frame(truth = train_data$diagnosis, estimate = preds$.pred_class)
+yardstick::accuracy(data = compare, truth = truth, estimate = estimate)
+```
+
+### 5. Model Specification & Tuning
+Here we define the SVM model, specify which hyperparameters we want to tune (`cost` and `rbf_sigma`), and create a tuning grid.
+
+```{r model-spec}
+# 6. MODEL SPECIFICATION
+# We specify a radial basis function (RBF) kernel SVM
+# We set the 'engine' to 'kernlab'
+# We will tune 'cost' (the C parameter) and 'rbf_sigma' (gamma)
+svm_spec <- svm_rbf(cost = tune(), rbf_sigma = tune()) %>%
+  set_engine("kernlab") %>%
+  set_mode("classification")
+
+# 7. CREATE WORKFLOW
+# Combine the recipe and model spec into a single workflow object
+svm_workflow <- workflow() %>%
+  add_recipe(svm_recipe) %>%
+  add_model(svm_spec)
+
+# 8. HYPERPARAMETER TUNING
+# Create a grid of hyperparameters to try
+# We will use a space-filling design to get 25 combinations
+svm_grid <- grid_latin_hypercube(
+  cost(),
+  rbf_sigma(),
+  size = 25
+)
+
+ctrl <- control_grid(save_workflow = TRUE)
+
+# Run the tuning process across all CV folds
+# This will try all 25 hyperparameter combinations on our 10 folds
+svm_tune_results <- tune_grid(
+  svm_workflow,
+  resamples = cv_folds,
+  grid = svm_grid,
+  control=ctrl)
+
+# Show the top 5 best-performing hyperparameter sets
+show_best(svm_tune_results, metric = "accuracy")
+
+# Select the single best set of parameters based on accuracy
+best_svm_params <- select_best(svm_tune_results, metric = "accuracy")
+```
+
+### 6. Finalize and Evaluate Model
+
+Now we update our workflow with the *best* parameters and fit it one last time to the *full training set*. Then, we evaluate its performance on the *held-out test set*.
+
+```{r final-fit}
+# 9. FINALIZE WORKFLOW
+# Update the workflow with the best parameters we just found
+final_svm_workflow <- finalize_workflow(
+  svm_workflow,
+  best_svm_params
+)
+
+# 10. FIT ON TRAIN, EVALUATE ON TEST
+# Use the 'last_fit' function to:
+# 1. Fit the final workflow on the *entire training set*
+# 2. Evaluate that fitted model on the *testing set*
+final_svm_fit <- last_fit(
+  final_svm_workflow,
+  data_split
+)
+```
+
+### 7. Review Performance Metrics
+
+Let's see how our final model performed on the test data. We will look at the key metrics requested in the proposal.
+- Predict on the test set. 
+- Evaluate metrics against preds and actual diagnoses.
+
+```{r metrics}
+best_svm_fit <- fit_best(svm_tune_results) #best fit model
+best_predictions <- predict(best_svm_fit, test_data) %>% 
+  bind_cols(test_data %>% select(diagnosis))
+
+# Performance Metrics - How Does the Model actually do on the test set.
+# Metrics from ML Course
+ml_mets <- metric_set(accuracy, precision, recall)
+
+svm_ml_metrics <- ml_mets(best_predictions,
+        truth = diagnosis, estimate = .pred_class, metrics = ml_mets) %>% pivot_wider(names_from = .metric, values_from = .estimate)
+
+svm_ml_metrics
+
+f1_score <- function(metrics_data){
+  2 * metrics_data$precision * metrics_data$recall / (metrics_data$precision + metrics_data$recall)
+  }
+
+f1_score(svm_ml_metrics)
+
 ```
 
 ```{r}
-data.m <- raw_dat %>% mutate(
-  diag_text = ifelse(diagnosis=="B", "Benign", "Malignant"),
-  diag_text = as.factor(diag_text)
-) %>%
-  select(-id, -diagnosis)
+# 11. COLLECT METRICS
+# Get the metrics from our test-set evaluation
+test_metrics <- collect_metrics(final_svm_fit)
+print(test_metrics)
 
-glimpse(data.m)
+# Get the predictions to build a confusion matrix
+test_predictions <- collect_predictions(final_svm_fit)
+
+#metrics from preds
+# Metrics from ML Course
+ml_mets <- metric_set(accuracy, precision, recall)
+
+#svm_metrics <- test_predictions %>% mutate(diagnosis = factor(diagnosis, levels = c("B", "M"))) %>%
+#  metrics(truth = diagnosis, estimate = .pred_class)
+
+# Generate and print the confusion matrix
+# Note: In a confusion matrix, 'M' (Malignant) is our "positive" class.
+# We set 'M' to be the first level to ensure this.
+conf_matrix <- conf_mat(
+  test_predictions,
+  truth = diagnosis,
+  estimate = .pred_class,
+  options = list(positive = "M") # Explicitly set positive class
+)
+
+print(conf_matrix)
+
+# You can also autoplot the confusion matrix
+autoplot(conf_matrix, type = "heatmap")
 ```
 
-## Pre process Variables as Required
+### 8. Save Model Artifacts
 
+Finally, we save the trained workflow (which includes the preprocessing recipe) and the performance metrics. This allows us to load them later in our final comparison script without re-running this entire file.
 
-## Import any Specific SVM packages needed
-- Check against 00_setup_libraries.rmd for installs. 
-```{r}
+```{r save-artifacts}
+# 12. SAVE ARTIFACTS
+# Save the final, fitted workflow
+saveRDS(
+  final_svm_fit,
+  file = here("_models", "final_svm_fit.rds")
+)
 
+# Save the test metrics
+saveRDS(
+  test_metrics,
+  file = here("_models", "svm_test_metrics.rds")
+)
+
+print("SVM model and metrics saved successfully.")
 ```
-
-## Setup SVM Engine/Model
-
-
-
-## Evaluation Metrics
-```{r}
-#show possible evaluation metrics --> YARDSTICK
-library(yardstick)
-#set metrics for SVM
-metrics.sel = metric_set(roc_auc, accuracy)
-```
-
-
-## Create a Confusion Matric for the model predictions
-
 
 

@@ -1,0 +1,114 @@
+---
+title: "SVM_Example"
+author: "ACT!!"
+date: "2025-10-01"
+always_allow_html: true
+output:
+  rmarkdown::github_document: default
+  always_allow_html: default
+  output:
+  md_document:
+    variant: gfm
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "../") })
+---
+
+```{r setup, include=FALSE}
+source("../_templates/utility_functions.R")
+.default_slick_knit_ops(verbose=TRUE)
+
+base_dir <- "../" # where output should default to
+base_url <- "" # keep as is
+fig_path <- "_plot_images/" # where image output should go
+
+knitr::opts_knit$set(base.dir = base_dir)
+knitr::opts_chunk$set(fig.path = fig_path,
+                      cache.path = '../cache/',  #log files go here
+                      message=FALSE, warning=FALSE,
+                      cache = TRUE) 
+```  
+
+
+# SVM Example
+Tutorial::
+https://www.datacamp.com/tutorial/support-vector-machines-r
+
+## Libraries
+```{r}
+# Load libraries
+library(dplyr)
+#install.packages("e1071") #for SVM implementation
+library(e1071)
+```
+
+## Non-Linear Example
+```{r}
+#load data
+#download.file("https://hastie.su.domains/ElemStatLearn/datasets/ESL.mixture.rda",
+#              destfile = "../_data/ESL.mixture.rda")
+
+load("../_data/ESL.mixture.rda", verbose=T)
+str(ESL.mixture)
+```
+```{r}
+#rm(x, y)
+attach(ESL.mixture)
+```
+
+
+```{r}
+plot(x, col = y + 1)
+```
+
+```{r}
+#make dataframe
+dat = data.frame(y = factor(y), x)
+#fit the SVM (non linear)
+fit = svm(factor(y) ~ ., data = dat, scale = FALSE, kernel = "radial", cost = 5)
+#kernel = "radial" adds the nonlinear element
+```
+The data seems to overlap quite a bit, but you can see that there's **something special in its structure.** (The bowing effect, curve effect - indicates nonlinearity, imagine plotting this radially or on polar coordinates. As exemplified previously, adding a radial dimension (z) will add separateion between the points in X1 X2) 
+- Now, let's make a data frame with the response y, and turn that into a factor. After that, you can fit an SVM with radial kernel and cost as 5.
+
+```{r}
+xgrid = expand.grid(X1 = px1, X2 = px2)
+ygrid = predict(fit, xgrid)
+```
+
+It's time to create a grid and make your predictions. These data actually came supplied with grid points. If you look down on the summary on the names that were on the list, there are 2 variables px1 and px2, which are the grid of values for each of those variables. You can use expand.grid to create the grid of values. Then you predict the classification at each of the values on the grid.
+
+```{r}
+plot(xgrid, col = as.numeric(ygrid), pch = 20, cex = .2)
+points(x, col = y + 1, pch = 19)
+```
+- The decision boundary, to a large extent, follows where the data is, but in a very non-linear way.
+
+- Let's see if you can improve this plot a little bit further and have the predict function produce the actual function estimates at each of our grid points. 
+  - In particular, you'd like to put in a curve that gives the decision boundary by making use of the *contour* function. On the data frame, there's also a variable called *prob*, which is the true probability of class 1 for these data, at the grid points. If you plot its 0.5 contour, that will give the *Bayes* Decision Boundary, which is the best one could ever do.
+First, you predict your fit on the grid. You tell it decision values equal TRUE because you want to get the actual function, not just the classification. It returns an attribute of the actual classified values, so you have to pull of that attribute. Then you access the one called decision.
+Next, you can follow the same steps as above to create the grid, make the predictions, and plot the points.
+Then, it's time to use the *contour* function. It requires the 2 grid sequences, a function, and 2 arguments*level* and *add*. You want the function in the form of a matrix, with the dimensions of $px1 \cdot and \cdot px2+$(69 and 99 respectively). 
+- You set level equals 0 and add it to the plot. As a result, you can see that the contour tracks the decision boundary, a convenient way of plotting a non-linear decision boundary in 2 dimensions.
+- Finally, you include the truth, which is the contour of the probabilities. That's the 0.5 contour, which would be the decision boundary in terms of the probabilities (also known as the **Bayes Decision Boundary**).
+
+```{r}
+func = predict(fit, xgrid, decision.values = TRUE)
+func = attributes(func)$decision
+
+xgrid = expand.grid(X1 = px1, X2 = px2)
+ygrid = predict(fit, xgrid)
+plot(xgrid, col = as.numeric(ygrid), pch = 20, cex = .2)
+points(x, col = y + 1, pch = 19)
+
+contour(px1, px2, matrix(func, 69, 99), level = 0, add = TRUE)
+contour(px1, px2, matrix(func, 69, 99), level = 0.5, add = TRUE, col = "blue", lwd = 2)
+```
+
+
+As a result, you can see your non-linear SVM has got pretty close to the Bayes Decision Boundary.
+Conclusion
+So to recap, Support Vector Machines are a subclass of supervised classifiers that attempt to partition a feature space into two or more groups. They achieve this by finding an optimal means of separating such groups based on their known class labels:
+	•	In simpler cases the separation "boundary" is linear, leading to groups that are split up by lines (or planes) in high-dimensional spaces.
+	•	In more complicated cases (where groups are not nicely separated by lines or planes), SVMs are able to carry out non-linear partitioning. This is achieved by means of a kernel function.
+	•	Ultimately, this makes them very sophisticated and capable classifiers, but at the usual expense that they can be prone to overfitting.
+Personally, I think SVMs are great classifiers for specific situations when the groups are clearly separated. They also do a great job when your data is non-linearly separated. You could transform data to linearly separate it, or you can have SVMs convert the data and linearly separate the two classes right out of the box. This is one of the main reasons to use SVMs. You don’t have to transform non-linear data yourself. One downside to SVMs is the black box nature of these functions. The use of kernels to separate non-linear data makes them difficult (if not impossible) to interpret. Understanding them will give you an alternative to GLMs and decision trees for classification. I hope this tutorial gives you a broader view of the SVM panorama and will allow you to understand these machines better.

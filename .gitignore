@@ -2,8 +2,8 @@
 .Rhistory
 .RData
 .Ruserdata
-slick_research_template.Rproj
-01_data_wrangling.Rmd
-proj_doc
-cache
+.DS_Store
+01_data_wrangling.md
+/proj_doc
+/cache
 example_RandForest_cancer.Rproj

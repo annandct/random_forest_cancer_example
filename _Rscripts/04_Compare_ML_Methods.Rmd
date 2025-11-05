@@ -1,0 +1,68 @@
+---
+title: "04_Compare_Models.md"
+author: "You!"
+date: "2025-10-31"
+always_allow_html: true
+output:
+  rmarkdown::github_document: default
+  always_allow_html: default
+  output:
+  md_document:
+    variant: gfm
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "../") })
+---
+
+```{r setup, include=FALSE}
+source("../_templates/utility_functions.R")
+.default_slick_knit_ops(verbose=TRUE)
+
+base_dir <- "../" # where output should default to
+base_url <- "" # keep as is
+fig_path <- "_plot_images/" # where image output should go
+
+knitr::opts_knit$set(base.dir = base_dir)
+knitr::opts_chunk$set(fig.path = fig_path,
+                      cache.path = '../cache/',  #log files go here
+                      message=FALSE, warning=FALSE,
+                      cache = TRUE) 
+```  
+
+## Compare Machine Learning Methods
+
+```{r}
+#load from models
+lasso_results <- read_rds(here("_models", "lasso_test_metrics.rds"))
+svm_results <- read_rds(here("_models", "svm_test_metrics.rds"))
+```
+
+```{r}
+#combine results
+combined_results <- bind_rows(
+  lasso_results %>% mutate(model = "Lasso Regression"),
+  svm_results %>% mutate(model = "SVM with RBF Kernel")
+)
+
+glimpse(combined_results)
+```
+
+```{r}
+#create F1 Score Formula
+f1_score <- function(precision, recall) {
+  2 * (precision * recall) / (precision + recall)
+}
+```
+
+
+```{r}
+#visualize comparison
+library(ggplot2)
+ggplot(combined_results, aes(x = model, y = .estimate, fill = model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  facet_wrap(~.metric, scales = "free_y") +
+  labs(title = "Comparison of Machine Learning Methods on BCWDD",
+       x = "Model",
+       y = "Metric Value") +
+  theme_minimal()
+```
+

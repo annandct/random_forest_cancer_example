@@ -29,7 +29,7 @@ knitr::opts_chunk$set(fig.path = fig_path,
 ```  
 
 
-# Analysis Scripts:: Colin T. Annand - Ph.D., D.WZ.
+# Analysis Scripts::
 
 - **Description:**
     - Create two analysis scripts:
@@ -149,9 +149,8 @@ rf_predictions %>%
   labs(title = "Random Forest Predictions: Probability of Malignant",
        x = "Predicted Probability of Malignant",
        y = "Count",
-       fill = "Actual Diagnosis",
-       caption = "Plot by Colin T. Annand") +
+       fill = "Actual Diagnosis") +
   theme_minimal()
 ```
-### CTA Comments
+**Comments** 
 - This bar plot is showing the model predictions vs accuracy. Essentially, the SMALL OVERLAP in the light Blue (M) for malignant is showing where the model classified a BENIGN tumor as Malignant. 
