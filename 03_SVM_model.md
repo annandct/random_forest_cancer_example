@@ -289,7 +289,7 @@ print(conf_matrix)
 autoplot(conf_matrix, type = "heatmap")
 ```
 
-![](../_plot_images/metrics-1.png)<!-- -->
+![](_plot_images/metrics-1.png)<!-- -->
 
 ### 8. Save Model Artifacts
 

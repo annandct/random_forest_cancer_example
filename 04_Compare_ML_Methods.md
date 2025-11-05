@@ -79,7 +79,7 @@ ggplot(aes(x=model, y=value, fill=metric)) +
   theme_minimal()
 ```
 
-![](../_plot_images/unnamed-chunk-4-1.png)<!-- -->
+![](_plot_images/unnamed-chunk-4-1.png)<!-- -->
 
 ## Generate Confusion Matrix for Each Model
 
@@ -116,7 +116,7 @@ map2(confusion_matrices, names(confusion_matrices), function(cm, model_name) {
 )
 ```
 
-![](../_plot_images/unnamed-chunk-5-1.png)<!-- -->
+![](_plot_images/unnamed-chunk-5-1.png)<!-- -->
 
 ``` r
 #visualize comparison
@@ -137,4 +137,4 @@ ggplot(combined_metrics, aes(x = str_extract(model, "^[^ ]+"), y = .estimate, fi
   theme_minimal()
 ```
 
-![](../_plot_images/unnamed-chunk-6-1.png)<!-- -->
+![](_plot_images/unnamed-chunk-6-1.png)<!-- -->

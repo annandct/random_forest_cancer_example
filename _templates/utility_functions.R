@@ -3,8 +3,8 @@
   verbose=TRUE,
   base_dir = "../", 
   base_url = "",
-  fig_path = "../_plot_images/", 
-  cache_path = "../_cache/", 
+  fig_path = "_plot_images/", 
+  cache_path = "_cache/", 
   #knit_options
   message = FALSE, 
   warning = FALSE, 

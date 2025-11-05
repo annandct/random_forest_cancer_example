@@ -155,8 +155,8 @@ rf_predictions %>%
   theme_minimal()
 ```
 
-![](../_plot_images/unnamed-chunk-2-1.png)<!-- --> **Comments** - This
-bar plot is showing the model predictions vs accuracy. Essentially, the
+![](_plot_images/unnamed-chunk-2-1.png)<!-- --> **Comments** - This bar
+plot is showing the model predictions vs accuracy. Essentially, the
 SMALL OVERLAP in the light Blue (M) for malignant is showing where the
 model classified a BENIGN tumor as Malignant.
 
@@ -295,7 +295,7 @@ print(conf_matrix)
 autoplot(conf_matrix, type = "heatmap")
 ```
 
-![](../_plot_images/rf-final-metrics-1.png)<!-- -->
+![](_plot_images/rf-final-metrics-1.png)<!-- -->
 
 ### Feature Importance
 
@@ -319,7 +319,7 @@ vip(fitted_rf_model, num_features = 20) +
   labs(title = "Random Forest Variable Importance")
 ```
 
-![](../_plot_images/rf-vip-1.png)<!-- -->
+![](_plot_images/rf-vip-1.png)<!-- -->
 
 ### Save Model Artifacts
 

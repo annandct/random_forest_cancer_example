@@ -264,7 +264,7 @@ print(conf_matrix)
 autoplot(conf_matrix, type = "heatmap")
 ```
 
-![](../_plot_images/metrics-1.png)<!-- -->
+![](_plot_images/metrics-1.png)<!-- -->
 
 ### 8. Feature Importance (Interpretability)
 
@@ -291,7 +291,7 @@ vip(fitted_lasso_model, num_features = 20) +
        subtitle = "Features with non-zero coefficients")
 ```
 
-![](../_plot_images/vip-1.png)<!-- -->
+![](_plot_images/vip-1.png)<!-- -->
 
 ``` r
 # We can also 'tidy' the model to see the coefficients as a data frame
