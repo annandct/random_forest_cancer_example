@@ -1,0 +1,159 @@
+---
+always_allow_html: true
+output:
+  rmarkdown::github_document: default
+  always_allow_html: default
+  output:
+  md_document:
+    variant: gfm
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "../") })
+---
+
+```{r setup, include=FALSE}
+#title: "04_Compare_Models.md"
+source("../_templates/utility_functions.R")
+.default_slick_knit_ops()
+library(kableExtra)
+library(knitr)
+library(dplyr)         #For data manipulation
+```  
+
+## Workflow Reproducibility and Model Comparison
+This script outlines the 'tidymodels' workflow used for the project. 
+
+```{r libraries}
+#library(tidymodels)   For the core modeling framework
+#library(tidyverse)    For data manipulation and visualization
+#library(vip)          Used for variable importance plots
+#library(kernlab)      SVM Library
+```
+### (A) Dataset Description
+Breast Cancer Wisconsin (Diagnostic) Dataset (BCWDD)
+ - Dimensions: 568 observations (rows) and 32 variables (columns).
+ - Target Variable: 'diagnosis' (Factor w/ 2 levels: "B" for Benign, "M" for Malignant).
+ - Predictors: 30 numerical features (e.g., radius_mean, texture_mean, area_worst).
+ - ID Variable: 'id' (removed during preprocessing).
+
+### (B) Tidymodels Approach for Reproducibility
+
+```{r tidymodels_workflow, eval=FALSE}
+#Set a single seed for all processes to ensure reproducibility
+ set.seed(8888)
+
+# 1. Data Splitting
+#  The data was split into training (75%) and testing (25%) sets.
+#  Stratification on 'diagnosis' was used to maintain class balance.
+ data_split <- initial_split(cancer_data, prop = 0.75, strata = diagnosis)
+ train_data <- training(data_split)
+ test_data  <- testing(data_split)
+
+# 2. Cross-Validation Folds
+#   10-fold cross-validation was created from the *training data*
+#   This same set of folds ('cv_folds') was used to tune all three models.
+  cv_folds <- vfold_cv(train_data, v = 10, strata = diagnosis)
+
+# 3. Preprocessing Recipe
+#   A single, consistent recipe was defined to be applied to all models.
+#   This ensures all models received the exact same processed data.
+  norm_recipe <- recipe(diagnosis ~ ., data = train_data) %>%
+   step_rm(id) %>%   The 'id' column is not a predictor
+   step_normalize(all_numeric_predictors())  Center and scale all 30 predictors
+
+
+# 4. Model Specifications for Tuning
+# These are the "blueprints" for the models, with parameters set to 'tune()'.
+ 
+  # --- Model 1: Random Forest ---
+ rf_spec_tune <- rand_forest(
+   mtry = tune(),   Number of predictors to sample
+   trees = 1000,    1000 trees is generally sufficient
+   min_n = tune()   Minimum node size
+ ) %>%
+   set_engine("ranger", importance = "permutation") %>%
+   set_mode("classification")
+
+  # --- Model 2: Lasso (L1) Logistic Regression ---
+ lasso_spec_tune <- logistic_reg(
+   penalty = tune(),  The L1 regularization penalty (lambda)
+   mixture = 1        mixture = 1 specifies a pure Lasso model
+ ) %>%
+   set_engine("glmnet") %>%
+   set_mode("classification")
+
+  # --- Model 3: Support Vector Machine (RBF Kernel) ---
+ svm_spec_tune <- svm_rbf(
+   cost = tune(),       The cost of misclassification
+   rbf_sigma = tune()   The gamma/sigma of the RBF kernel
+ ) %>%
+   set_engine("kernlab") %>%
+   set_mode("classification")
+
+# 5. Model Fitting Routine (Example)
+# Each model was then tuned using a workflow, tune_grid, and the 'cv_folds'.
+  # The example below is for the Random Forest.
+
+  rf_workflow_tune <- workflow() %>%
+    add_model(rf_spec_tune) %>%
+    add_recipe(norm_recipe)
+ 
+  rf_tune_results <- tune_grid(
+    rf_workflow_tune,
+    resamples = cv_folds,
+    grid = 20  Test 20 candidate hyperparameter combinations
+  )
+ 
+  #  The 'best' model was selected, finalized, and fit one last time
+  #  on the full training set and evaluated on the test set.
+  best_rf_params <- select_best(rf_tune_results, metric = "accuracy")
+ 
+  final_rf_fit <- last_fit(
+    finalize_workflow(rf_workflow_tune, best_rf_params),
+    data_split
+  )
+```
+
+### (C) Final Tables Comparing Model Outcomes
+The data below is hard-coded from the final, verified results
+from running the 'last_fit()' evaluation on the test set (n=142).
+
+```{r echo=FALSE}
+# --- Table 1: Final Performance Metrics ---
+#message("--- Final Performance Metrics (Test Set) ---")
+comparison_metrics <- tibble(
+  model = c("Random Forest", "Lasso Regression", "SVM (RBF)"),
+  accuracy = c(0.958, 0.951, 0.958),
+  precision = c(0.980, 0.979, 0.980),
+  recall = c(0.906, 0.887, 0.906)
+)
+kable(comparison_metrics) %>% 
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE, position = "center") %>%
+  kableExtra::add_header_above(c("Final Performance Metrics (Test Set)"=4))
+```
+
+```{r echo=FALSE}
+#### Table 2: Final Confusion Matrix Comparison
+#message("\n--- Final Confusion Matrix Summary (Test Set) ---")
+# Rows represent 'Actual' diagnosis, Columns 'Predicted' diagnosis.
+confusion_summary <- tibble(
+  model = c("Random Forest", "Lasso Regression", "SVM (RBF)"),
+  true_negative_B = c(88, 88, 88),   # Predicted Benign, Actual Benign
+  false_positive_M = c(1, 1, 1),    # Predicted Malignant, Actual Benign
+  false_negative_B = c(5, 6, 5),    # Predicted Benign, Actual Malignant
+  true_positive_M = c(48, 47, 48)   # Predicted Malignant, Actual Malignant
+)
+kable(confusion_summary) %>% kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE, position = "center") %>%
+  kableExtra::add_header_above(c("Final Confusion Matrix (Test Set)"=5))
+```
+
+```{r echo=FALSE}
+#### Table 3: Best Tuned Hyperparameters
+#message("\n--- Best Tuned Hyperparameters (from 10-Fold CV) ---")
+best_params <- tibble(
+  model = c("Random Forest", "Lasso Regression", "SVM (RBF)"),
+  parameter_1 = c("mtry = 10", "penalty = 0.00356", "cost = 21.5"),
+  parameter_2 = c("min_n = 6", NA, "rbf_sigma = 0.000318")
+)
+kable(best_params) %>%  kable_styling(bootstrap_options = c("striped", "hover", "condensed"), full_width = FALSE, position = "center") %>%
+  kableExtra::add_header_above(c("Final Confusion Matrix (Test Set)"=3))
+```
