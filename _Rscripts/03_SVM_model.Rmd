@@ -20,7 +20,7 @@ source("../_templates/utility_functions.R")
 This script implements Step 4 of the project proposal: fitting and tuning a non-linear Support Vector Machine (SVM) model with a Radial Basis Function (RBF) kernel.
 
 ```{r libraries}
-
+library(dplyr)
 library(tidymodels)  # For the core modeling workflow
 library(tidyverse)   # For general data manipulation and loading
 library(here)        # For robust file paths
@@ -32,13 +32,25 @@ library(vip)         #variables of importance
 set.seed(8888) 
 ```
 
-## OUTLINE OF ANALYSIS 
+
+**OUTLINE OF ANALYSIS **
 
 Model 3 (SVM): Implement Support Vector Machines 
   - Use k-fold cross-validation.
   - Evaluate using metrics/comparisons for SVM performance on BCWDD (Breast Cancer Diagnosis Dataset).
   - Evaluate Model Output, consideration. Indications of critical variables etc...
 
+## Support Vector Machine (SVM) Implementation
+### Methodological Note: 
+  SVM searches for an optimal hyperplane that separates the two classes (Benign vs. Malignant) with the maximum margin. Since the tumor data is not linearly separable (complex overlaps between classes), we use the Kernel Trick. 
+  Optimization Problem: We minimize the following cost function:
+  $$ \min_{w, b, \xi} \left( \frac{1}{2} ||w||^2 + C \sum_{i=1}^{N} \xi_i \right) $$
+  Subject to:$$ y_i (w \cdot \phi(x_i) + b) \geq 1 - \xi_i $$
+  Where:$\phi(x_i)$ maps the input vectors into a higher-dimensional space.$\xi_i$ are slack variables allowing for some misclassification (controlled by $C$).
+  The RBF Kernel handles the mapping implicitly: 
+  $K(x_i, x_j) = \exp(-\gamma ||x_i - x_j||^2)$.
+  
+  
 ### 1. Load Data
 
 ```{r}
@@ -67,6 +79,8 @@ test_data %>% count(diagnosis) %>% mutate(prop = n/sum(n))
 ### 3. Preprocessing Recipe
 
 We define our preprocessing steps. For an SVM, it is **critical** that we `step_scale()` and `step_center()` all numeric predictors. The recipe will be *trained* on the training data and *applied* to both train and test sets.
+
+Critical Step: SVMs rely on distance calculations (Euclidean distance in the kernel). If features are not scaled (e.g., area_mean ~ 1000 vs smoothness ~ 0.1), the kernel will be dominated by the large variables. Normalization is mandatory.
 
 ```{r recipe}
 # 4. PREPROCESSING RECIPE
@@ -109,6 +123,10 @@ yardstick::accuracy(data = compare, truth = truth, estimate = estimate)
 
 ### 5. Model Specification & Tuning
 Here we define the SVM model, specify which hyperparameters we want to tune (`cost` and `rbf_sigma`), and create a tuning grid.
+
+Hyperparameters:
+  Cost (cost): Controls the penalty for misclassification. High cost = strict margin (risk of overfitting). Low cost = soft margin.
+  RBF Sigma (rbf_sigma): Controls the width of the Gaussian kernel. High sigma = complex, wiggly decision boundary.
 
 ```{r model-spec}
 # 6. MODEL SPECIFICATION
@@ -180,17 +198,17 @@ final_svm_fit <- last_fit(
 Compare *tuned* model to test data
 ```{r metrics}
 # Get the MODEL METRICS metrics from our test-set evaluation
-test_metrics <- collect_metrics(final_svm_fit)
-print(test_metrics)
+svm_test_metrics <- collect_metrics(final_svm_fit)
+print(svm_test_metrics)
 ```
 
 ## Accuracy, Sensitivity, Recall Metrics
 ```{r}
 # Get the PERFORMANCE metrics predictions to build a confusion matrix
-test_predictions <- collect_predictions(final_svm_fit)
+svm_predictions <- collect_predictions(final_svm_fit)
 # Metrics from ML Course
-ml_mets <- metric_set(accuracy, precision, recall)
-ml_mets(test_predictions, truth = diagnosis, estimate = .pred_class)
+ml_mets <- metric_set(accuracy, precision, recall, f_meas)
+ml_mets(svm_predictions, truth = diagnosis, estimate = .pred_class)
 ```
 
 ## Generate and print the confusion matrix
@@ -199,7 +217,7 @@ ml_mets(test_predictions, truth = diagnosis, estimate = .pred_class)
 # Note: In a confusion matrix, 'M' (Malignant) is our "positive" class.
 # We set 'M' to be the first level to ensure this.
 conf_matrix <- conf_mat(
-  test_predictions,
+  svm_predictions,
   truth = diagnosis,
   estimate = .pred_class,
   options = list(positive = "M") # Explicitly set positive class
@@ -213,13 +231,57 @@ print(conf_matrix)
 autoplot(conf_matrix, type = "heatmap")
 ```
 
+# plot ROC-AUC Curves
+```{r}
+svm_probs <- final_svm_workflow %>% 
+  fit(data = train_data) %>%
+  predict(new_data = test_data, type = "prob") %>%
+  bind_cols(test_data %>% select(diagnosis))
+
+svm_probs %>% 
+  roc_curve(diagnosis, .pred_B) %>%
+  autoplot() +
+  labs(
+    title = "ROC Curve: SVM (RBF Kernel)",
+    subtitle = "Performance of the Non-Linear Support Vector Machine"
+  )
+
+
+# #plot roc-auc for the SVM Model
+# svm_predictions %>%
+#   #pr_curve(diagnosis, .pred_B) %>%
+#   roc_curve(diagnosis, .pred_M) %>%
+#   autoplot() +
+#   labs(
+#     title = "ROC Curve: SVM (RBF Kernel)",
+#     subtitle = "Performance of the Non-Linear Support Vector Machine"
+#   )
+
+```
+
+
+
+```{r}
+# Precision-Recall Curve
+# The RBF kernel often produces excellent separation, potentially yielding
+# higher Area Under the Curve (AUC) than linear methods.
+svm_predictions %>%
+  pr_curve(diagnosis, .pred_M) %>%
+  autoplot() +
+  labs(
+    title = "Precision-Recall Curve: SVM (RBF Kernel)",
+    subtitle = "Performance of the Non-Linear Support Vector Machine"
+  )
+```
+
+
 ### 8. Save Model Artifacts
 
 ```{r save-artifacts}
 # 12. SAVE ARTIFACTS
 # Save the final, fitted workflow
 saveRDS(
-  list("model" = final_svm_fit, "metrics" = test_metrics, "preds" = test_predictions),
+  list("model" = final_svm_fit, "metrics" = svm_test_metrics, "preds" = svm_predictions),
   file = here("_models", "final_svm_output.rds")
 )
 ```

@@ -24,6 +24,13 @@ Proposed Method 2:
   - Use Lasso (L1) Logistic Regression, specifically to see if a sparse model can be interpretable for this dataset without sacrificing too much accuracy. 
   - Use cross-validation to select the optimal regularization parameter (lambda). 
   - The resulting model's coefficients will be analyzed to produce a ranked list of the most important diagnostic features.
+  
+## Lasso Regression Implementation
+### Methodological Note: 
+Lasso (Least Absolute Shrinkage and Selection Operator) extends standard Logistic Regression by adding an $L1$ penalty to the objective function. For a binary outcome $y_i \in \{0,1\}$ (Benign/Malignant), we minimize the negative log-likelihood with a constraint on the sum of the absolute values of the coefficients:
+$$ \min_{(\beta_0, \beta)} \left{ - \frac{1}{N} \sum_{i=1}^{N} [y_i (x_i^T \beta + \beta_0) - \log(1 + e^{x_i^T \beta + \beta_0})] + \lambda \sum_{j=1}^{p} |\beta_j| \right} $$
+
+Where:$\lambda$ is the tuning parameter that controls the strength of the penalty.As $\lambda$ increases, coefficients $\beta_j$ are shrunk towards zero.Feature Selection: Unlike Ridge regression, Lasso can shrink coefficients to exactly zero, effectively removing those variables from the model. This makes Lasso ideal for this dataset, as it identifies the minimal subset of tumor features required for accurate diagnosis, enhancing interpretability.
 
 
 ```{r libraries}
@@ -69,6 +76,8 @@ test_data %>% count(diagnosis) %>% mutate(prop = n/sum(n))
 
 This recipe is nearly identical to the SVM one. Scaling and centering are **critical** for Lasso regression, as the penalty is applied directly to the coefficients' values.
 
+Critical Step: Lasso requires all predictors to be on the same scale because the penalty term $\sum |\beta_j|$ treats all coefficients equally. If one variable has a range of 0-1000 and another 0-1, the larger one would be penalized unfairly without normalization.
+
 ```{r recipe}
 # 4. PREPROCESSING RECIPE
 # We are predicting 'diagnosis' using all other variables (.).
@@ -94,6 +103,8 @@ cv_folds <- vfold_cv(train_data, v = 10, strata = diagnosis)
 
 Here we define the `logistic_reg` model. We set `mixture = 1` to specify *pure Lasso* (L1 penalty) and tell `tidymodels` we want to `tune()` the `penalty` (lambda) parameter.
 
+- We tune penalty (lambda). We set mixture = 1 to define a pure Lasso model (mixture=0 is Ridge, mixture=0.5 is Elastic Net).
+
 ```{r model-spec}
 # 6. MODEL SPECIFICATION
 # We specify a logistic regression model.
@@ -109,7 +120,10 @@ lasso_spec <- logistic_reg(penalty = tune(), mixture = 1) %>%
 lasso_workflow <- workflow() %>%
   add_recipe(lasso_recipe) %>%
   add_model(lasso_spec)
+```
 
+
+```{r}
 # 8. HYPERPARAMETER TUNING
 # Create a grid of 50 different 'penalty' (lambda) values to try
 lasso_grid <- grid_regular(penalty(), levels = 50)
@@ -192,6 +206,19 @@ print(conf_matrix)
 
 ```{r}
 autoplot(conf_matrix, type = "heatmap")
+```
+
+```{r}
+# Precision-Recall Curve
+# Compare this to the Random Forest curve to see which model
+# maintains higher precision as recall increases.
+test_predictions %>%
+  roc_curve(diagnosis, .pred_M) %>%
+  autoplot() +
+  labs(
+    title = "ROC Curve: Lasso Regression",
+    subtitle = "Performance of the L1-regularized Logistic Model"
+  )
 ```
 
 ### 8. Feature Importance (Interpretability)

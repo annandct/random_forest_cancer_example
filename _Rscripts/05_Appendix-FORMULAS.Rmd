@@ -1,0 +1,82 @@
+---
+always_allow_html: default
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+#title: "04_Compare_Models.md"
+source("../_templates/utility_functions.R")
+.default_slick_knit_ops()
+library(kableExtra)
+library(knitr)
+library(dplyr)         #For data manipulation
+
+
+# output:
+#   md_document:
+#   variant: gfm
+# knit: (function(inputFile, encoding) {
+#   rmarkdown::render(inputFile, encoding = encoding, output_dir = "../") })
+
+```
+
+## Workflow Reproducibility and Model Comparison
+
+This script outlines the 'tidymodels' workflow used for the project.
+
+------------------------------------------------------------------------
+
+### Part 2: Updated Paper Text
+
+ADD TO NOTEDBOOK / SECTION: `A Comparative Analysis of ML Models for Breast Cancer Diagnosis`).
+
+SWAP THE GENERALIZED DESCRIPTIN WITH MATH FORMULAS
+
+**2.1 Random Forest (RF)**
+
+**2.1.1 Mathematical Formulation** The Random Forest algorithm is an ensemble learning method that constructs a multitude of decision trees at training time. Let the dataset be defined as $D = \{(x_1, y_1), \dots, (x_N, y_N)\}$, where $x_i$ is a 30-dimensional vector of tumor features (e.g., radius, texture, concavity) and $y_i \in \{ \text{Benign}, \text{Malignant} \}$ is the target diagnosis.
+
+The Random Forest predictor $\hat{f}_{rf}^{B}$ aggregates the predictions of $B$ individual trees $\{T_1, \dots, T_B\}$ via majority voting: $$\hat{f}_{rf}^{B}(x) = \text{mode} \{ \hat{C}_b(x) \}_{b=1}^{B}$$ where $\hat{C}_b(x)$ is the class prediction of the $b$-th tree.
+
+**2.1.2 Algorithmic Implementation and Suitability** To ensure diversity among the trees and prevent overfitting, the algorithm employs two key stochastic elements: 1. **Bootstrap Aggregating (Bagging):** Each tree $T_b$ is trained on a random sample of the data drawn with replacement. 2. **Feature Subsampling:** At each node split, a random subset of features (hyperparameter `mtry`) is selected as candidates. The split is chosen to maximize the reduction in **Gini Impurity** ($I_G$): $$I_G(p) = 1 - \sum_{k=1}^{K} p_k^2$$ where $p_k$ is the proportion of samples belonging to class $k$ at a specific node.
+
+**Why this fits the Breast Cancer Dataset:** The BCWDD dataset exhibits high **multicollinearity**; for instance, `radius_mean`, `perimeter_mean`, and `area_mean` are geometrically linked and highly correlated. Traditional linear models (like standard Logistic Regression) may become unstable under these conditions. [cite_start]Random Forest handles this naturally: by forcing trees to split on different random subsets of features, it allows correlated variables to contribute to the decision logic independently, capturing non-linear interactions without the need for manual feature elimination[cite: 1].
+
+------------------------------------------------------------------------
+
+------------------------------------------------------------------------
+
+### Part 4: Updated Paper Text (Lasso Section)
+
+ADD TO NOTEDBOOK / SECTION: `A Comparative Analysis...` or `04_Compare_ML_Methods.md`).
+
+**2.2 Lasso Logistic Regression**
+
+**2.2.1 Mathematical Formulation** To address the need for model interpretability, we implemented Logistic Regression with the Least Absolute Shrinkage and Selection Operator (Lasso) penalty. In standard logistic regression, we estimate coefficients $\beta$ by maximizing the likelihood of the observed diagnoses. Lasso modifies this by imposing a constraint on the magnitude of the coefficients.
+
+The objective function minimizes the negative log-likelihood plus an $L1$ penalty term: $$\min_{(\beta_0, \beta)} \left\{ - \frac{1}{N} \sum_{i=1}^{N} \ell(y_i, p(x_i)) + \lambda \sum_{j=1}^{p} |\beta_j| \right\}$$ where $\ell(\cdot)$ is the log-likelihood function, $p$ is the number of features (30), and $\lambda \geq 0$ is a tuning parameter determined via cross-validation.
+
+**2.2.2 Feature Selection and Interpretability** The critical property of the $L1$ penalty ($\sum |\beta_j|$) is its geometry. The constraint region is a diamond shape (polytope), which has corners where coefficients are exactly zero. As the penalty $\lambda$ increases, the optimization solution hits these corners, forcing the coefficients of less informative or redundant variables to become exactly zero.
+
+**Why this fits the Breast Cancer Dataset:** The BCWDD dataset contains groups of features that are highly correlated (e.g., `radius_worst`, `perimeter_worst`, `area_worst`). Including all of them in a standard regression model leads to variance inflation and coefficients that are hard to interpret. Lasso automatically performs **feature selection**, retaining only the most predictive feature from a correlated group and discarding the rest. This results in a "sparse" model that relies on a smaller subset of variables (e.g., only 8-12 features instead of 30), making it easier for clinicians to validate the model's decision logic against medical knowledge.
+
+### Part 6: Updated Paper Text (SVM Section)
+
+Here is the text to insert into your comparative analysis report (e.g., `04_Compare_ML_Methods.md`), completing the methodology section.
+
+**2.3 Support Vector Machines (SVM)**
+
+**2.3.1 Mathematical Formulation** To capture non-linear relationships between tumor features, we implemented a Support Vector Machine (SVM) with a Radial Basis Function (RBF) kernel. The SVM algorithm seeks to find the optimal hyperplane that separates benign and malignant cases with the maximum "margin" (distance between the hyperplane and the nearest data points).
+
+The optimization problem is defined as minimizing the cost function: $$\min_{w, b, \xi} \left( \frac{1}{2} ||w||^2 + C \sum_{i=1}^{N} \xi_i \right)$$ Subject to the constraints: $$y_i (w \cdot \phi(x_i) + b) \geq 1 - \xi_i \quad \text{and} \quad \xi_i \geq 0$$ where: \* $w$ is the weight vector defining the hyperplane. \* $C$ is the regularization parameter (cost) that balances maximizing the margin vs. minimizing classification errors on the training set. \* $\xi_i$ are "slack variables" that allow for misclassification of difficult outliers (soft margin).
+
+**2.3.2 The Kernel Trick** The dataset is likely not linearly separable in its original 30-dimensional space. We employ the **Radial Basis Function (RBF)** kernel to implicitly map the data into a higher-dimensional space where separation is possible. The kernel function is defined as: $$K(x_i, x_j) = \exp(-\gamma ||x_i - x_j||^2)$$ where $\gamma$ (`rbf_sigma`) controls the influence of a single training example.
+
+**Suitability for Diagnosis:** SVMs are particularly effective for this problem because the "margin" concept provides robustness against overfitting, provided the parameters $C$ and $\gamma$ are tuned correctly. The RBF kernel allows the model to form complex, curved decision boundaries that can isolate irregular clusters of malignant tumors that standard linear regressions would miss. However, unlike Lasso, the SVM model is a "black box"; the decision boundary is defined by support vectors in a high-dimensional space, making it difficult to trace exactly *why* a specific diagnosis was made in biological terms.
+
+## Comparison Section
+
+-   SVM: The decision boundary relies on support vectors in a high-dimensional space transformed by the RBF kernel ($K(x_i, x_j) = \exp(-\gamma ||x_i - x_j||^2)$), making it mathematically abstract and difficult to explain to a patient.
+-   Random Forest: While feature importance plots (via Gini Impurity) identify which variables matter (e.g., radius_worst, perimeter_worst), the actual decision logic involves voting across 1,000 trees, preventing a simple "if-then" explanation. Lasso: The Lasso model is highly interpretable. It selected a sparse subset of features and assigned explicit coefficients (e.g., $\beta_{\text{radius\_worst}} = 4.35$). A clinician can directly see that for every unit increase in standardized radius_worst, the log-odds of malignancy increase by 4.35.
