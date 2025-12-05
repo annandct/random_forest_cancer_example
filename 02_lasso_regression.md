@@ -12,6 +12,25 @@ regularization parameter (lambda). - The resulting model’s coefficients
 will be analyzed to produce a ranked list of the most important
 diagnostic features.
 
+## Lasso Regression Implementation
+
+### Methodological Note:
+
+Lasso (Least Absolute Shrinkage and Selection Operator) extends standard
+Logistic Regression by adding an $L1$ penalty to the objective function.
+For a binary outcome $y_i \in \{0,1\}$ (Benign/Malignant), we minimize
+the negative log-likelihood with a constraint on the sum of the absolute
+values of the coefficients:
+$$ \min_{(\beta_0, \beta)} \left{ - \frac{1}{N} \sum_{i=1}^{N} [y_i (x_i^T \beta + \beta_0) - \log(1 + e^{x_i^T \beta + \beta_0})] + \lambda \sum_{j=1}^{p} |\beta_j| \right} $$
+
+Where:$\lambda$ is the tuning parameter that controls the strength of
+the penalty.As $\lambda$ increases, coefficients $\beta_j$ are shrunk
+towards zero.Feature Selection: Unlike Ridge regression, Lasso can
+shrink coefficients to exactly zero, effectively removing those
+variables from the model. This makes Lasso ideal for this dataset, as it
+identifies the minimal subset of tumor features required for accurate
+diagnosis, enhancing interpretability.
+
 ``` r
 # 1. SETUP LIBRARIES
 library(tidymodels)  # For the core modeling workflow
@@ -107,6 +126,11 @@ This recipe is nearly identical to the SVM one. Scaling and centering
 are **critical** for Lasso regression, as the penalty is applied
 directly to the coefficients’ values.
 
+Critical Step: Lasso requires all predictors to be on the same scale
+because the penalty term $\sum |\beta_j|$ treats all coefficients
+equally. If one variable has a range of 0-1000 and another 0-1, the
+larger one would be penalized unfairly without normalization.
+
 ``` r
 # 4. PREPROCESSING RECIPE
 # We are predicting 'diagnosis' using all other variables (.).
@@ -134,6 +158,9 @@ Here we define the `logistic_reg` model. We set `mixture = 1` to specify
 *pure Lasso* (L1 penalty) and tell `tidymodels` we want to `tune()` the
 `penalty` (lambda) parameter.
 
+- We tune penalty (lambda). We set mixture = 1 to define a pure Lasso
+  model (mixture=0 is Ridge, mixture=0.5 is Elastic Net).
+
 ``` r
 # 6. MODEL SPECIFICATION
 # We specify a logistic regression model.
@@ -149,7 +176,9 @@ lasso_spec <- logistic_reg(penalty = tune(), mixture = 1) %>%
 lasso_workflow <- workflow() %>%
   add_recipe(lasso_recipe) %>%
   add_model(lasso_spec)
+```
 
+``` r
 # 8. HYPERPARAMETER TUNING
 # Create a grid of 50 different 'penalty' (lambda) values to try
 lasso_grid <- grid_regular(penalty(), levels = 50)
@@ -167,13 +196,13 @@ show_best(lasso_tune_results, metric = "accuracy")
 ```
 
     ## # A tibble: 5 × 7
-    ##    penalty .metric  .estimator  mean     n std_err .config              
-    ##      <dbl> <chr>    <chr>      <dbl> <int>   <dbl> <chr>                
-    ## 1 3.56e- 3 accuracy binary     0.979    10 0.00655 Preprocessor1_Model38
-    ## 2 2.22e- 3 accuracy binary     0.976    10 0.00611 Preprocessor1_Model37
-    ## 3 5.69e- 3 accuracy binary     0.976    10 0.00611 Preprocessor1_Model39
-    ## 4 1   e-10 accuracy binary     0.972    10 0.00909 Preprocessor1_Model01
-    ## 5 1.60e-10 accuracy binary     0.972    10 0.00909 Preprocessor1_Model02
+    ##    penalty .metric  .estimator  mean     n std_err .config         
+    ##      <dbl> <chr>    <chr>      <dbl> <int>   <dbl> <chr>           
+    ## 1 3.56e- 3 accuracy binary     0.979    10 0.00655 pre0_mod38_post0
+    ## 2 2.22e- 3 accuracy binary     0.976    10 0.00611 pre0_mod37_post0
+    ## 3 5.69e- 3 accuracy binary     0.976    10 0.00611 pre0_mod39_post0
+    ## 4 1   e-10 accuracy binary     0.972    10 0.00909 pre0_mod01_post0
+    ## 5 1.60e-10 accuracy binary     0.972    10 0.00909 pre0_mod02_post0
 
 ``` r
 # Select the single best penalty value
@@ -182,9 +211,9 @@ best_lasso_params
 ```
 
     ## # A tibble: 1 × 2
-    ##   penalty .config              
-    ##     <dbl> <chr>                
-    ## 1 0.00356 Preprocessor1_Model38
+    ##   penalty .config         
+    ##     <dbl> <chr>           
+    ## 1 0.00356 pre0_mod38_post0
 
 ``` r
 #fit best model ^^ this is duplication of code from above, but worth seeing/saving the params. Can also fit with the params
@@ -242,27 +271,28 @@ print(test_metrics)
 ```
 
     ## # A tibble: 3 × 4
-    ##   .metric     .estimator .estimate .config             
-    ##   <chr>       <chr>          <dbl> <chr>               
-    ## 1 accuracy    binary        0.951  Preprocessor1_Model1
-    ## 2 roc_auc     binary        0.989  Preprocessor1_Model1
-    ## 3 brier_class binary        0.0340 Preprocessor1_Model1
+    ##   .metric     .estimator .estimate .config        
+    ##   <chr>       <chr>          <dbl> <chr>          
+    ## 1 accuracy    binary        0.951  pre0_mod0_post0
+    ## 2 roc_auc     binary        0.989  pre0_mod0_post0
+    ## 3 brier_class binary        0.0340 pre0_mod0_post0
 
 ## Accuracy, Sensitivity, Recall Metrics
 
 ``` r
 # Get the predictions to build a confusion matrix
 test_predictions <- collect_predictions(final_lasso_fit)
-ml_mets <- metric_set(accuracy, precision, recall)
+ml_mets <- metric_set(accuracy, precision, recall, f_meas)
 ml_mets(test_predictions, truth = diagnosis, estimate = .pred_class)
 ```
 
-    ## # A tibble: 3 × 3
+    ## # A tibble: 4 × 3
     ##   .metric   .estimator .estimate
     ##   <chr>     <chr>          <dbl>
     ## 1 accuracy  binary         0.951
     ## 2 precision binary         0.936
     ## 3 recall    binary         0.989
+    ## 4 f_meas    binary         0.962
 
 ## Generate and print the confusion matrix
 
@@ -287,7 +317,22 @@ print(conf_matrix)
 autoplot(conf_matrix, type = "heatmap")
 ```
 
-![](_plot_images/unnamed-chunk-5-1.png)<!-- -->
+![](_plot_images/unnamed-chunk-6-1.png)<!-- -->
+
+``` r
+# Precision-Recall Curve
+# Compare this to the Random Forest curve to see which model
+# maintains higher precision as recall increases.
+test_predictions %>%
+  roc_curve(diagnosis, .pred_M) %>%
+  autoplot() +
+  labs(
+    title = "ROC Curve: Lasso Regression",
+    subtitle = "Performance of the L1-regularized Logistic Model"
+  )
+```
+
+![](_plot_images/unnamed-chunk-7-1.png)<!-- -->
 
 ### 8. Feature Importance (Interpretability)
 

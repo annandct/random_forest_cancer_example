@@ -187,7 +187,7 @@ print(test_metrics)
 ```{r}
 # Get the predictions to build a confusion matrix
 test_predictions <- collect_predictions(final_lasso_fit)
-ml_mets <- metric_set(accuracy, precision, recall)
+ml_mets <- metric_set(accuracy, precision, recall, f_meas)
 ml_mets(test_predictions, truth = diagnosis, estimate = .pred_class)
 ```
 

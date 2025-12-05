@@ -4,9 +4,19 @@
 
 ## Random Forest Implementation
 
-- Implement RF Model
-- Use cross Validation
-- Save model outpu
+### Methodological Note:
+
+The Random Forest (RF) algorithm functions as an ensemble of decision
+trees. Mathematically, given a dataset
+$D = \{(x_1, y_1), \dots, (x_N, y_N)\}$, the RF predictor $\hat{f}_{rf}$
+aggregates the votes of $B$
+trees:$$ \hat{f}_{rf}^{B}(x) = \text{majority vote} { \hat{C}b(x) }{1}^{B} $$where
+$\hat{C}_b(x)$ is the class prediction of the $b$-th tree. - This method
+is particularly suited for the Breast Cancer Wisconsin dataset because
+it handles the high multicollinearity between features (e.g.,
+radius_mean vs. area_mean) by randomly selecting subsets of features at
+each split, allowing correlated variables to contribute independently to
+the model logic.
 
 ``` r
 # Load libraries
@@ -99,34 +109,47 @@ test_data %>% count(diagnosis) %>% mutate(prop = n/sum(n))
 rf_model <- rand_forest(mtry = 5, trees = 1000, min_n = 10) %>%
   set_engine("ranger") %>%
   set_mode("classification")
-```
 
-``` r
+#{r recipe-preprocess}
 # Create a recipe for preprocessing
 rf_recipe <- recipe(diagnosis ~ ., data = train_data) %>%
   step_rm(id) %>%
   step_normalize(all_numeric_predictors())
-```
 
-``` r
+#
 # Create a workflow
 rf_workflow <- workflow() %>%
   add_model(rf_model) %>%
   add_recipe(rf_recipe)
-```
 
-``` r
+#{r training-fitting}
 # Train the model
 rf_fit <- rf_workflow %>%
   fit(data = train_data)
-```
 
-``` r
+#{r model-predictions}
 # Make predictions on the test set
 rf_predictions <- rf_fit %>%
   predict(new_data = test_data) %>%
   bind_cols(test_data %>% select(diagnosis))
+
+rf_predictions
 ```
+
+    ## # A tibble: 142 × 2
+    ##    .pred_class diagnosis
+    ##    <fct>       <fct>    
+    ##  1 M           M        
+    ##  2 M           M        
+    ##  3 M           M        
+    ##  4 M           M        
+    ##  5 M           M        
+    ##  6 M           M        
+    ##  7 M           M        
+    ##  8 B           B        
+    ##  9 M           M        
+    ## 10 B           B        
+    ## # ℹ 132 more rows
 
 ``` r
 # Evaluate the model
@@ -155,10 +178,12 @@ rf_predictions %>%
   theme_minimal()
 ```
 
-![](_plot_images/unnamed-chunk-2-1.png)<!-- --> **Comments** - This bar
-plot is showing the model predictions vs accuracy. Essentially, the
-SMALL OVERLAP in the light Blue (M) for malignant is showing where the
-model classified a BENIGN tumor as Malignant.
+![](_plot_images/unnamed-chunk-2-1.png)<!-- -->
+
+**Comments** - This bar plot is showing the model predictions vs
+accuracy. Essentially, the SMALL OVERLAP in the light Blue (M) for
+malignant is showing where the model classified a BENIGN tumor as
+Malignant.
 
 ## Machine Learning Routine
 
@@ -175,8 +200,18 @@ cv_folds <- vfold_cv(train_data, v = 10, strata = diagnosis)
 ### Model Specification for Tuning
 
 We will tune `mtry` (number of predictors per split) and `min_n`
-(minimum node size). We’ll set the engine to `ranger` for speed and to
-enable variable importance.
+(minimum node size). Engine to `ranger` for speed and to enable variable
+importance. Note, ranger uses GINI coefficient to optimise.
+
+We tune two key hyperparameters to control overfitting and model
+complexity:
+
+mtry: The number of variables randomly sampled as candidates at each
+split. Tuning this helps decorrelate the trees.
+
+min_n: The minimum number of data points required in a node to split
+further. Larger values prevent the trees from learning noise
+(overfitting).
 
 ``` r
 # Define the random forest model, but with tunable parameters
@@ -213,6 +248,7 @@ Now we run the tuning process across our 10 CV folds.
 rf_grid <- grid_latin_hypercube(
   mtry(range = c(1, 30)), # Try values for mtry from 1 to 30
   min_n(range = c(2, 20)), # Try values for min_n from 2 to 20
+  #trees(range = c(200,2000)), # Try values for trees from 200 to 2000
   size = 20
 )
 
@@ -230,20 +266,26 @@ show_best(rf_tune_results, metric = "accuracy")
 ```
 
     ## # A tibble: 5 × 8
-    ##    mtry min_n .metric  .estimator  mean     n std_err .config              
-    ##   <int> <int> <chr>    <chr>      <dbl> <int>   <dbl> <chr>                
-    ## 1    10     6 accuracy binary     0.962    10 0.00795 Preprocessor1_Model16
-    ## 2    19    16 accuracy binary     0.962    10 0.00945 Preprocessor1_Model02
-    ## 3     9    11 accuracy binary     0.960    10 0.00702 Preprocessor1_Model04
-    ## 4     8    13 accuracy binary     0.960    10 0.00702 Preprocessor1_Model18
-    ## 5    14     3 accuracy binary     0.960    10 0.00868 Preprocessor1_Model05
+    ##    mtry min_n .metric  .estimator  mean     n std_err .config         
+    ##   <int> <int> <chr>    <chr>      <dbl> <int>   <dbl> <chr>           
+    ## 1     8     6 accuracy binary     0.965    10 0.00624 pre0_mod05_post0
+    ## 2     8    20 accuracy binary     0.965    10 0.00624 pre0_mod06_post0
+    ## 3    11     2 accuracy binary     0.965    10 0.00528 pre0_mod07_post0
+    ## 4    16     5 accuracy binary     0.965    10 0.00528 pre0_mod11_post0
+    ## 5    27     3 accuracy binary     0.965    10 0.00398 pre0_mod18_post0
 
 ``` r
 # Select the single best set of parameters
 best_rf_params <- select_best(rf_tune_results, metric = "accuracy")
 
-#
+# Print the best parameters
+print(best_rf_params)
 ```
+
+    ## # A tibble: 1 × 3
+    ##    mtry min_n .config         
+    ##   <int> <int> <chr>           
+    ## 1     8     6 pre0_mod05_post0
 
 ### Finalize and Evaluate Model
 
@@ -268,19 +310,41 @@ final_rf_fit <- last_fit(
 
 Let’s see how our *tuned* model performed on the test data.
 
+### NOTES:
+
+- Standard accuracy can be misleading in medical diagnosis if classes
+  are imbalanced. We analyze Precision (Positive Predictive Value) and
+  Recall (Sensitivity).
+
 ``` r
 # Get the metrics from our test-set evaluation
-test_metrics <- collect_metrics(final_rf_fit)
+rf_test_metrics <- collect_metrics(final_rf_fit)
 
 # Get the predictions to build a confusion matrix
-test_predictions <- collect_predictions(final_rf_fit)
+rf_test_predictions <- collect_predictions(final_rf_fit)
+```
 
+``` r
+rf_predictions <- collect_predictions(final_rf_fit)
+ml_mets <- metric_set(accuracy, precision, recall, f_meas)
+ml_mets(rf_test_predictions, truth = diagnosis, estimate = .pred_class)
+```
+
+    ## # A tibble: 4 × 3
+    ##   .metric   .estimator .estimate
+    ##   <chr>     <chr>          <dbl>
+    ## 1 accuracy  binary         0.951
+    ## 2 precision binary         0.936
+    ## 3 recall    binary         0.989
+    ## 4 f_meas    binary         0.962
+
+``` r
 # Generate and print the confusion matrix
 conf_matrix <- conf_mat(
-  test_predictions,
+  rf_predictions,
   truth = diagnosis,
   estimate = .pred_class,
-  options = list(positive = "M") # Set positive = "M"
+  options = list(positive = "M")
 )
 
 print(conf_matrix)
@@ -288,14 +352,45 @@ print(conf_matrix)
 
     ##           Truth
     ## Prediction  B  M
-    ##          B 88  5
-    ##          M  1 48
+    ##          B 88  6
+    ##          M  1 47
 
 ``` r
 autoplot(conf_matrix, type = "heatmap")
 ```
 
-![](_plot_images/rf-final-metrics-1.png)<!-- -->
+![](_plot_images/unnamed-chunk-5-1.png)<!-- -->
+
+``` r
+# Precision-Recall Curve
+# Visualizes the trade-off between capturing all cancers (Recall) 
+# and ensuring positive predictions are actually cancer (Precision).
+
+## ROC -AUC
+rf_test_predictions %>%
+  roc_curve(diagnosis, .pred_B) %>%
+  autoplot() +
+  labs(
+    title = "ROC Curve: Random Forest",
+    subtitle = "Performance of the Best Fit Params against Test Data"
+  )
+```
+
+![](_plot_images/unnamed-chunk-6-1.png)<!-- -->
+
+``` r
+###---
+
+rf_predictions %>%
+  pr_curve(diagnosis, .pred_M) %>%
+  autoplot() +
+  labs(
+    title = "Precision-Recall Curve: Random Forest",
+    subtitle = "Area under the curve indicates model robustness for the 'Malignant' class"
+  )
+```
+
+![](_plot_images/unnamed-chunk-7-1.png)<!-- -->
 
 ### Feature Importance
 
@@ -316,7 +411,8 @@ print("Plotting Variable Importance...")
 
 ``` r
 vip(fitted_rf_model, num_features = 20) +
-  labs(title = "Random Forest Variable Importance")
+  labs(title = "Random Forest Variable Importance",
+       subtitle = "Features contributing most to Gini Impurity reduction")
 ```
 
 ![](_plot_images/rf-vip-1.png)<!-- -->
@@ -326,7 +422,7 @@ vip(fitted_rf_model, num_features = 20) +
 ``` r
 # Save the final, fitted workflow
 saveRDS(
-  list("model" = final_rf_fit, "metrics" = test_metrics, "preds" = test_predictions),
+  list("model" = final_rf_fit, "metrics" = rf_test_metrics, "preds" = rf_test_predictions),
   file = here("_models", "final_rf_output.rds")
 )
 

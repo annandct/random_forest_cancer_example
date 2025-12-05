@@ -1,0 +1,152 @@
+---
+title: "04_Compare_FN_Probs.md"
+date: "2025-10-31"
+always_allow_html: true
+output:
+  rmarkdown::github_document: default
+  always_allow_html: default
+  output:
+  md_document:
+    variant: gfm
+knit: (function(inputFile, encoding) {
+  rmarkdown::render(inputFile, encoding = encoding, output_dir = "../") })
+---
+
+```{r setup, include=FALSE}
+source("../_templates/utility_functions.R")
+.default_slick_knit_ops()
+```  
+
+```{r}
+# 1. SETUP LIBRARIES
+#library(tidymodels)  # For the core modeling workflow
+library(tidyverse)   # For general data manipulation and loading
+library(tidymodels)
+library(dplyr)
+library(tidyr)
+library(here)        # For robust file paths
+#library(glmnet)      # The 'engine' for penalized regression
+library(vip)         # For variable importance plots
+#library(conflicted)  # To manage function name conflicts
+```
+
+## Compare Machine Learning Methods
+
+```{r}
+# 1. Load the Model Artifacts
+rf_output <- readRDS(here("_models", "final_rf_output.rds"))
+svm_output <- readRDS(here("_models", "final_svm_output.rds"))
+
+# 2. Extract Prediction Data Frames
+# We assume row alignment is preserved due to identical set.seed(8888) usage
+rf_preds <- rf_output$preds
+svm_preds <- svm_output$preds
+
+# 3. Identify False Negatives
+# (Patients who have Malignant cancer (M), but the model predicted Benign (B))
+# We find the row indices where this occurred in the Random Forest model
+# (Since both models had the same 5 FN, we can just use one to find the indices)
+fn_indices <- which(rf_preds$diagnosis == "M" & rf_preds$.pred_class == "B")
+fnK_indices <- which(svm_preds$diagnosis == "M" & svm_preds$.pred_class == "B")
+
+union_index <- union(fn_indices, fnK_indices)
+
+# 4. Construct the Comparison Table
+missed_cases <- data.frame(
+  #Patient_Index = fn_indices,
+  #Truth = "Malignant",
+  
+  Patient_Index = union_index,
+  Truth = "Malignant",
+  
+  # Extract the Probability of Malignancy (.pred_M) for these rows
+  # Note: A score of 0.49 is a "close call", a score of 0.10 is a "total miss"
+  #RF_Prob_Malignant  = rf_preds$.pred_M[fn_indices],
+  #SVM_Prob_Malignant = svm_preds$.pred_M[fn_indices]
+  
+  RF_FN.RF_Prob_Malignant  = rf_preds$.pred_M[union_index],
+  RF_FN.SVM_Prob_Malignant = svm_preds$.pred_M[union_index],
+  
+  SVM_FN.RF_Prob_Malignant  = rf_preds$.pred_M[union_index],
+  SVM_FN.SVM_Prob_Malignant = svm_preds$.pred_M[union_index]
+  
+)
+
+
+missed_cases
+```
+
+```{r}
+# 1. Load the Model Artifacts
+rf_output <- readRDS(here("_models", "final_rf_output.rds"))
+svm_output <- readRDS(here("_models", "final_svm_output.rds"))
+
+# 2. Extract Prediction Data Frames
+# We assume row alignment is preserved due to identical set.seed(8888) usage
+rf_preds <- rf_output$preds
+svm_preds <- svm_output$preds
+
+# 3. Identify False Negatives (Missed Cancers)
+# Truth is Malignant (M), but Predicted Class was Benign (B)
+rf_missed_indices <- which(rf_preds$diagnosis == "M" & rf_preds$.pred_class == "B")
+svm_missed_indices <- which(svm_preds$diagnosis == "M" & svm_preds$.pred_class == "B")
+
+# Find the UNION of all difficult cases (missed by at least one model)
+difficult_cases_indices <- union(rf_missed_indices, svm_missed_indices)
+
+# 4. Construct the Comparison Table
+missed_cases <- data.frame(
+  Patient_Index = difficult_cases_indices,
+  Truth = "Malignant",
+  
+  # Extract Probabilities
+  RF_Prob_M  = rf_preds$.pred_M[difficult_cases_indices],
+  SVM_Prob_M = svm_preds$.pred_M[difficult_cases_indices]
+)
+
+# 5. Categorize the Failure Mode
+# We classify each case as "Missed by Both", "RF Only", or "SVM Only"
+missed_cases <- missed_cases %>%
+  mutate(
+    RF_Status = ifelse(RF_Prob_M < 0.5, "MISSED", "Caught"),
+    SVM_Status = ifelse(SVM_Prob_M < 0.5, "MISSED", "Caught"),
+    
+    Category = case_when(
+      RF_Status == "MISSED" & SVM_Status == "MISSED" ~ "Hard Case (Both Missed)",
+      RF_Status == "MISSED" & SVM_Status == "Caught" ~ "RF Failed / SVM Success",
+      RF_Status == "Caught" & SVM_Status == "MISSED" ~ "RF Success / SVM Failed"
+    ),
+    
+    # Who was more confident? (Higher prob = 'less wrong')
+    Stronger_Model = ifelse(RF_Prob_M > SVM_Prob_M, "Random Forest", "SVM")
+  ) %>%
+  arrange(Category)
+
+# 6. Print the Table
+print("Analysis of Difficult Cases (False Negatives by at least one model):")
+knitr::kable(missed_cases, digits = 3, caption = "Comparison of Models on Difficult Cases")
+
+# 7. Visualization of the Discrepancies
+missed_cases_long <- missed_cases %>%
+  select(Patient_Index, RF_Prob_M, SVM_Prob_M, Category) %>%
+  pivot_longer(cols = c(RF_Prob_M, SVM_Prob_M), 
+               names_to = "Model", 
+               values_to = "Probability")
+
+ggplot(missed_cases_long, aes(x = as.factor(Patient_Index), y = Probability, fill = Model)) +
+  geom_bar(stat = "identity", position = "dodge") +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "black") +
+  annotate("text", x = 0.1, y = 0.54, label = "Threshold", color = "black", hjust=0, size=3) +
+  facet_wrap(~Category, scales = "free_x") +
+  labs(
+    title = "Ensemble Disagreement on Edge Cases",
+    #subtitle = "Cases where one model succeeds while the other fails highlight the benefit of using both.",
+    x = "Patient Index",
+    y = "Prob. of Malignancy"
+  ) +
+  #scale_fill_discrete(palette = "greys") +
+  scale_fill_manual(values = c("RF_Prob_M" = "grey50", "SVM_Prob_M" = "grey80")) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+

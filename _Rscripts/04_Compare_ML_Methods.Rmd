@@ -136,10 +136,14 @@ str_extract(combined_metrics$model, "^[^ ]+")
 ggplot(combined_metrics, aes(x = str_extract(model, "^[^ ]+"), y = .estimate, fill = model)) +
   geom_bar(stat = "identity", position = "dodge") +
   facet_wrap(~.metric, scales = "free_y") +
+  scale_y_continuous(limits = c(0.6, 1.0), oob = scales::rescale_none) + # Zoom in on top performance
   labs(title = "Comparison of Machine Learning Methods on BCWDD",
        x = "Model",
        y = "Metric Value") +
-  theme_minimal()
+    jtools::theme_apa()+
+  scale_fill_discrete(palette = "greys") +
+  theme(legend.position = "bottom")
+
 ```
 
 #- V2 ---
@@ -198,7 +202,7 @@ print(plotting_data)
 #3. Visualize Comparative Metrics
 ggplot(plotting_data, aes(x = model, y = value, fill = metric)) +
   geom_bar(stat = "identity", position = "dodge", alpha = 0.8, color="black") +
-  scale_y_continuous(limits = c(0.8, 1.0), oob = scales::rescale_none) + # Zoom in on top performance
+  scale_y_continuous(limits = c(0.9, 1.0), oob = scales::rescale_none) + # Zoom in on top performance
   labs(
     title = "Model Performance Comparison",
     subtitle = "Random Forest and SVM slightly outperform Lasso in Recall (Sensitivity)",

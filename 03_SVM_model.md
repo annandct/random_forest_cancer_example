@@ -7,6 +7,7 @@ tuning a non-linear Support Vector Machine (SVM) model with a Radial
 Basis Function (RBF) kernel.
 
 ``` r
+library(dplyr)
 library(tidymodels)  # For the core modeling workflow
 library(tidyverse)   # For general data manipulation and loading
 library(here)        # For robust file paths
@@ -18,12 +19,28 @@ library(vip)         #variables of importance
 set.seed(8888) 
 ```
 
-## OUTLINE OF ANALYSIS
+**OUTLINE OF ANALYSIS **
 
 Model 3 (SVM): Implement Support Vector Machines - Use k-fold
 cross-validation. - Evaluate using metrics/comparisons for SVM
 performance on BCWDD (Breast Cancer Diagnosis Dataset). - Evaluate Model
 Output, consideration. Indications of critical variables etc…
+
+## Support Vector Machine (SVM) Implementation
+
+### Methodological Note:
+
+SVM searches for an optimal hyperplane that separates the two classes
+(Benign vs. Malignant) with the maximum margin. Since the tumor data is
+not linearly separable (complex overlaps between classes), we use the
+Kernel Trick. Optimization Problem: We minimize the following cost
+function:
+$$ \min_{w, b, \xi} \left( \frac{1}{2} ||w||^2 + C \sum_{i=1}^{N} \xi_i \right) $$
+Subject to:$$ y_i (w \cdot \phi(x_i) + b) \geq 1 - \xi_i $$
+Where:$\phi(x_i)$ maps the input vectors into a higher-dimensional
+space.$\xi_i$ are slack variables allowing for some misclassification
+(controlled by $C$). The RBF Kernel handles the mapping implicitly:
+$K(x_i, x_j) = \exp(-\gamma ||x_i - x_j||^2)$.
 
 ### 1. Load Data
 
@@ -108,6 +125,11 @@ we `step_scale()` and `step_center()` all numeric predictors. The recipe
 will be *trained* on the training data and *applied* to both train and
 test sets.
 
+Critical Step: SVMs rely on distance calculations (Euclidean distance in
+the kernel). If features are not scaled (e.g., area_mean ~ 1000 vs
+smoothness ~ 0.1), the kernel will be dominated by the large variables.
+Normalization is mandatory.
+
 ``` r
 # 4. PREPROCESSING RECIPE
 # We are predicting 'diagnosis' using all other variables (.).
@@ -147,10 +169,11 @@ summary(svm_fit)
 
     ##              Length Class   Mode     
     ## lvl          2      -none-  character
+    ## ordered      1      -none-  logical  
     ## spec         8      svm_rbf list     
     ## fit          1      ksvm    S4       
     ## preproc      1      -none-  list     
-    ## elapsed      1      -none-  list     
+    ## elapsed      2      -none-  list     
     ## censor_probs 0      -none-  list
 
 ``` r
@@ -168,6 +191,11 @@ yardstick::accuracy(data = compare, truth = truth, estimate = estimate)
 
 Here we define the SVM model, specify which hyperparameters we want to
 tune (`cost` and `rbf_sigma`), and create a tuning grid.
+
+Hyperparameters: Cost (cost): Controls the penalty for
+misclassification. High cost = strict margin (risk of overfitting). Low
+cost = soft margin. RBF Sigma (rbf_sigma): Controls the width of the
+Gaussian kernel. High sigma = complex, wiggly decision boundary.
 
 ``` r
 # 6. MODEL SPECIFICATION
@@ -202,19 +230,23 @@ svm_tune_results <- tune_grid(
   resamples = cv_folds,
   grid = svm_grid,
   control=ctrl)
+```
 
+    ## maximum number of iterations reached 0.001417583 0.001417548maximum number of iterations reached 8.089798e-05 8.050794e-05maximum number of iterations reached 5.659447e-05 5.659444e-05maximum number of iterations reached 0.01586052 0.01594274maximum number of iterations reached 0.01284582 0.01277976maximum number of iterations reached 0.01344155 0.01337136maximum number of iterations reached 0.003229249 0.003228709maximum number of iterations reached 0.0002074683 0.0002074677maximum number of iterations reached 0.008717992 0.008281756maximum number of iterations reached 0.01494581 0.01508221maximum number of iterations reached 0.001319483 0.001319452maximum number of iterations reached 0.0001162342 0.0001157476maximum number of iterations reached 5.286221e-05 5.286219e-05maximum number of iterations reached 0.01489938 0.01481295maximum number of iterations reached 0.0121491 0.01208072maximum number of iterations reached 0.01271831 0.01263802maximum number of iterations reached 0.003026007 0.003025574maximum number of iterations reached 0.0001932819 0.0001932813maximum number of iterations reached 0.009123679 0.008653774maximum number of iterations reached 0.01516095 0.01528345maximum number of iterations reached 0.001379413 0.001379379maximum number of iterations reached 7.84085e-05 7.80637e-05maximum number of iterations reached 5.563651e-05 5.563648e-05maximum number of iterations reached 0.01575208 0.01581746maximum number of iterations reached 0.0126011 0.01251446maximum number of iterations reached 0.01323511 0.01316225maximum number of iterations reached 0.003166273 0.003165771maximum number of iterations reached 0.0002040917 0.0002040911maximum number of iterations reached 0.008330992 0.007873105maximum number of iterations reached 0.01497311 0.01514695maximum number of iterations reached 0.001377494 0.001377464maximum number of iterations reached 0.0001498901 0.0001491066maximum number of iterations reached 5.49006e-05 5.490057e-05maximum number of iterations reached 0.0158707 0.0159165maximum number of iterations reached 0.01255815 0.01248933maximum number of iterations reached 0.01316376 0.01308902maximum number of iterations reached 0.003156235 0.003155729maximum number of iterations reached 0.0002015653 0.0002015647maximum number of iterations reached 0.008742257 0.008339706maximum number of iterations reached 0.01462926 0.01476433maximum number of iterations reached 0.001357528 0.001357496maximum number of iterations reached 8.589858e-05 8.550289e-05maximum number of iterations reached 5.456678e-05 5.456675e-05maximum number of iterations reached 0.01579562 0.01585391maximum number of iterations reached 0.01249927 0.0124266maximum number of iterations reached 0.01305218 0.01297035maximum number of iterations reached 0.00311706 0.003116582maximum number of iterations reached 0.0001999956 0.000199995maximum number of iterations reached 0.009089441 0.008602945maximum number of iterations reached 0.01509631 0.01523911maximum number of iterations reached 0.001387731 0.001387696maximum number of iterations reached 0.0001445618 0.0001438806maximum number of iterations reached 5.573845e-05 5.573842e-05maximum number of iterations reached 0.01600736 0.01603722maximum number of iterations reached 0.01272069 0.01265346maximum number of iterations reached 0.01335774 0.0132812maximum number of iterations reached 0.003183054 0.003182545maximum number of iterations reached 0.0002053346 0.000205334maximum number of iterations reached 0.009752091 0.009248073maximum number of iterations reached 0.01510426 0.01523645maximum number of iterations reached 0.001380177 0.001380148maximum number of iterations reached 0.0001190611 0.000118555maximum number of iterations reached 5.487557e-05 5.487554e-05maximum number of iterations reached 0.01578883 0.01582474maximum number of iterations reached 0.01252465 0.01244691maximum number of iterations reached 0.01321175 0.0131359maximum number of iterations reached 0.003148178 0.003147671maximum number of iterations reached 0.0002008696 0.000200869maximum number of iterations reached 0.008397215 0.007949387maximum number of iterations reached 0.01503009 0.01516941maximum number of iterations reached 0.001330661 0.00133063maximum number of iterations reached 0.0001851457 0.0001841904maximum number of iterations reached 5.38075e-05 5.380747e-05maximum number of iterations reached 0.01573065 0.01576376maximum number of iterations reached 0.01230852 0.01224617maximum number of iterations reached 0.01283373 0.01276372maximum number of iterations reached 0.003050276 0.003049828maximum number of iterations reached 0.0001970969 0.0001970963maximum number of iterations reached 0.008060816 0.007670404maximum number of iterations reached 0.01511858 0.01522964maximum number of iterations reached 0.001317911 0.001317882maximum number of iterations reached 8.655182e-05 8.617115e-05maximum number of iterations reached 5.309681e-05 5.309678e-05maximum number of iterations reached 0.01535296 0.01534485maximum number of iterations reached 0.01224843 0.01218528maximum number of iterations reached 0.01279159 0.0127255maximum number of iterations reached 0.003029932 0.003029498maximum number of iterations reached 0.0001946035 0.0001946029maximum number of iterations reached 0.008221567 0.00783493maximum number of iterations reached 0.01413935 0.01421228maximum number of iterations reached 0.001422508 0.001422472maximum number of iterations reached 0.0001022807 0.0001017746maximum number of iterations reached 5.74622e-05 5.746217e-05maximum number of iterations reached 0.01578465 0.01585581maximum number of iterations reached 0.01298673 0.01291584maximum number of iterations reached 0.01350555 0.01343408maximum number of iterations reached 0.003228931 0.003228395maximum number of iterations reached 0.0002105864 0.0002105856maximum number of iterations reached 0.00894146 0.008474907maximum number of iterations reached 0.01490795 0.01505318
+
+``` r
 # Show the top 5 best-performing hyperparameter sets
 show_best(svm_tune_results, metric = "accuracy")
 ```
 
     ## # A tibble: 5 × 8
-    ##       cost    rbf_sigma .metric  .estimator  mean     n std_err .config         
-    ##      <dbl>        <dbl> <chr>    <chr>      <dbl> <int>   <dbl> <chr>           
-    ## 1 21.5     0.000318     accuracy binary     0.976    10 0.00787 Preprocessor1_M…
-    ## 2 19.7     0.00104      accuracy binary     0.974    10 0.00900 Preprocessor1_M…
-    ## 3  0.605   0.00550      accuracy binary     0.960    10 0.0107  Preprocessor1_M…
-    ## 4  0.496   0.0000000102 accuracy binary     0.627    10 0.00142 Preprocessor1_M…
-    ## 5  0.00715 0.000239     accuracy binary     0.627    10 0.00142 Preprocessor1_M…
+    ##        cost rbf_sigma .metric  .estimator  mean     n std_err .config         
+    ##       <dbl>     <dbl> <chr>    <chr>      <dbl> <int>   <dbl> <chr>           
+    ## 1 21.5      0.000318  accuracy binary     0.976    10 0.00787 pre0_mod25_post0
+    ## 2 19.7      0.00104   accuracy binary     0.974    10 0.00900 pre0_mod24_post0
+    ## 3  0.605    0.00550   accuracy binary     0.960    10 0.0107  pre0_mod16_post0
+    ## 4  0.000990 0.0744    accuracy binary     0.627    10 0.00142 pre0_mod01_post0
+    ## 5  0.00224  0.0000268 accuracy binary     0.627    10 0.00142 pre0_mod02_post0
 
 ``` r
 # Select the single best set of parameters based on accuracy
@@ -223,9 +255,9 @@ best_svm_params
 ```
 
     ## # A tibble: 1 × 3
-    ##    cost rbf_sigma .config              
-    ##   <dbl>     <dbl> <chr>                
-    ## 1  21.5  0.000318 Preprocessor1_Model11
+    ##    cost rbf_sigma .config         
+    ##   <dbl>     <dbl> <chr>           
+    ## 1  21.5  0.000318 pre0_mod25_post0
 
 ### 6. Finalize and Evaluate Model
 
@@ -257,33 +289,34 @@ Compare *tuned* model to test data
 
 ``` r
 # Get the MODEL METRICS metrics from our test-set evaluation
-test_metrics <- collect_metrics(final_svm_fit)
-print(test_metrics)
+svm_test_metrics <- collect_metrics(final_svm_fit)
+print(svm_test_metrics)
 ```
 
     ## # A tibble: 3 × 4
-    ##   .metric     .estimator .estimate .config             
-    ##   <chr>       <chr>          <dbl> <chr>               
-    ## 1 accuracy    binary        0.958  Preprocessor1_Model1
-    ## 2 roc_auc     binary        0.989  Preprocessor1_Model1
-    ## 3 brier_class binary        0.0306 Preprocessor1_Model1
+    ##   .metric     .estimator .estimate .config        
+    ##   <chr>       <chr>          <dbl> <chr>          
+    ## 1 accuracy    binary        0.958  pre0_mod0_post0
+    ## 2 roc_auc     binary        0.989  pre0_mod0_post0
+    ## 3 brier_class binary        0.0301 pre0_mod0_post0
 
 ## Accuracy, Sensitivity, Recall Metrics
 
 ``` r
 # Get the PERFORMANCE metrics predictions to build a confusion matrix
-test_predictions <- collect_predictions(final_svm_fit)
+svm_predictions <- collect_predictions(final_svm_fit)
 # Metrics from ML Course
-ml_mets <- metric_set(accuracy, precision, recall)
-ml_mets(test_predictions, truth = diagnosis, estimate = .pred_class)
+ml_mets <- metric_set(accuracy, precision, recall, f_meas)
+ml_mets(svm_predictions, truth = diagnosis, estimate = .pred_class)
 ```
 
-    ## # A tibble: 3 × 3
+    ## # A tibble: 4 × 3
     ##   .metric   .estimator .estimate
     ##   <chr>     <chr>          <dbl>
     ## 1 accuracy  binary         0.958
     ## 2 precision binary         0.946
     ## 3 recall    binary         0.989
+    ## 4 f_meas    binary         0.967
 
 ## Generate and print the confusion matrix
 
@@ -291,7 +324,7 @@ ml_mets(test_predictions, truth = diagnosis, estimate = .pred_class)
 # Note: In a confusion matrix, 'M' (Malignant) is our "positive" class.
 # We set 'M' to be the first level to ensure this.
 conf_matrix <- conf_mat(
-  test_predictions,
+  svm_predictions,
   truth = diagnosis,
   estimate = .pred_class,
   options = list(positive = "M") # Explicitly set positive class
@@ -312,13 +345,59 @@ autoplot(conf_matrix, type = "heatmap")
 
 ![](_plot_images/unnamed-chunk-6-1.png)<!-- -->
 
+# plot ROC-AUC Curves
+
+``` r
+svm_probs <- final_svm_workflow %>% 
+  fit(data = train_data) %>%
+  predict(new_data = test_data, type = "prob") %>%
+  bind_cols(test_data %>% select(diagnosis))
+
+svm_probs %>% 
+  roc_curve(diagnosis, .pred_B) %>%
+  autoplot() +
+  labs(
+    title = "ROC Curve: SVM (RBF Kernel)",
+    subtitle = "Performance of the Non-Linear Support Vector Machine"
+  )
+```
+
+![](_plot_images/unnamed-chunk-7-1.png)<!-- -->
+
+``` r
+# #plot roc-auc for the SVM Model
+# svm_predictions %>%
+#   #pr_curve(diagnosis, .pred_B) %>%
+#   roc_curve(diagnosis, .pred_M) %>%
+#   autoplot() +
+#   labs(
+#     title = "ROC Curve: SVM (RBF Kernel)",
+#     subtitle = "Performance of the Non-Linear Support Vector Machine"
+#   )
+```
+
+``` r
+# Precision-Recall Curve
+# The RBF kernel often produces excellent separation, potentially yielding
+# higher Area Under the Curve (AUC) than linear methods.
+svm_predictions %>%
+  pr_curve(diagnosis, .pred_M) %>%
+  autoplot() +
+  labs(
+    title = "Precision-Recall Curve: SVM (RBF Kernel)",
+    subtitle = "Performance of the Non-Linear Support Vector Machine"
+  )
+```
+
+![](_plot_images/unnamed-chunk-8-1.png)<!-- -->
+
 ### 8. Save Model Artifacts
 
 ``` r
 # 12. SAVE ARTIFACTS
 # Save the final, fitted workflow
 saveRDS(
-  list("model" = final_svm_fit, "metrics" = test_metrics, "preds" = test_predictions),
+  list("model" = final_svm_fit, "metrics" = svm_test_metrics, "preds" = svm_predictions),
   file = here("_models", "final_svm_output.rds")
 )
 ```
